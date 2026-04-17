@@ -1,6 +1,9 @@
 import 'dart:developer' as developer;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../main.dart';
+
 
 class NotificationService {
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
@@ -36,7 +39,28 @@ class NotificationService {
     // 4. Handle foreground messages
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       developer.log('Received foreground message: ${message.notification?.title}');
-      // You could show a local notification or snackbar here
+      
+      RemoteNotification? notification = message.notification;
+      AndroidNotification? android = message.notification?.android;
+
+      // If `onMessage` is triggered with a notification, construct our own
+      // local notification to show to users using the created channel.
+      if (notification != null && android != null) {
+        flutterLocalNotificationsPlugin.show(
+          notification.hashCode,
+          notification.title,
+          notification.body,
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              channel.id,
+              channel.name,
+              channelDescription: channel.description,
+              icon: android.smallIcon ?? '@mipmap/ic_launcher',
+              // other properties...
+            ),
+          ),
+        );
+      }
     });
 
     // 5. Handle clicks (when app is in background but opened via notification)
