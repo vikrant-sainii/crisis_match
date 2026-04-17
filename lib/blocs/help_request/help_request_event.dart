@@ -96,8 +96,14 @@ class AcceptRequest extends HelpRequestEvent {
 /// Helper rejects
 class RejectRequest extends HelpRequestEvent {
   final String requestId;
+  final String victimId;
+  final String? matchedId;
 
-  const RejectRequest(this.requestId);
+    const RejectRequest({
+    required this.requestId,
+    required this.victimId,
+    this.matchedId,
+  });
 
   @override
   List<Object?> get props => [requestId];

@@ -24,23 +24,8 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
-	<key>LSApplicationQueriesSchemes</key>
-	<array>
-		<string>https</string>
-		<string>http</string>
-	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Your location is required for live tracking between you and your assigned responder during emergencies.</string>
-	<key>NSLocationAlwaysUsageDescription</key>
-	<string>Your location is required for continuous coordination with responders during an active crisis.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Your location is required to connect you with the nearest emergency responders for rapid intervention.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>CrisisMatch needs microphone access to transcribe your emergency voice reports.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>CrisisMatch uses speech recognition to help you report emergencies faster via voice.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -64,10 +49,6 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -85,5 +66,20 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>http</string>
+	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Your location is required to connect you with the nearest emergency responders for rapid intervention.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Your location is required for live tracking between you and your assigned responder during emergencies.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Your location is required for continuous coordination with responders during an active crisis.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>CrisisMatch uses speech recognition to help you report emergencies faster via voice.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>CrisisMatch needs microphone access to transcribe your emergency voice reports.</string>
 </dict>
 </plist>

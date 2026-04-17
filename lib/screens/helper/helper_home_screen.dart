@@ -58,12 +58,23 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
         _isAvailable = helper.isAvailable;
       });
 
+      context.read<HelpRequestBloc>().add(
+        ListenForHelperMatches(helper.id),
+      );
+
+      // Check for active missions to sync chat immediately
+      final helpState = context.read<HelpRequestBloc>().state;
+      if (helpState is HelperRequestsLoaded) {
+        try {
+          final activeMission = helpState.requests.firstWhere((r) => r.status == 'accepted');
+          context.read<ChatBloc>().add(LoadMessages(activeMission.id));
+        } catch (_) {}
+      }
+
       final locationState = context.read<LocationBloc>().state;
       if (locationState is LocationLoaded) {
         await helperRepo.updateLocation(helper.id, locationState.lat, locationState.lng);
       }
-
-      context.read<HelpRequestBloc>().add(ListenForHelperMatches(helper.id));
     }
   }
 
@@ -111,39 +122,57 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
                   ),
 
                   // Data Views
-                  BlocBuilder<HelpRequestBloc, HelpRequestState>(
-                    builder: (context, state) {
+                  BlocListener<HelpRequestBloc, HelpRequestState>(
+                    listener: (context, state) {
                       if (state is HelperRequestsLoaded) {
-                        final reqs = state.requests;
-                        return TabBarView(
-                          controller: _tabController,
-                          children: [
-                            _buildRequestList(reqs.where((r) => r.status == 'pending').toList(), 'NO PENDING UPLINKS'),
-                            _buildRequestList(reqs.where((r) => r.status == 'accepted').toList(), 'NO ACTIVE MISSIONS'),
-                            _buildRequestList(reqs.where((r) => r.status == 'completed').toList(), 'ARCHIVES EMPTY'),
-                            _buildRequestList(reqs.where((r) => r.status == 'rejected').toList(), 'REJECTIONS LOGS CLEAR'),
-                          ],
-                        );
+                        // Optional: Detect subtle changes here if needed
                       }
-                      if (state is HelpRequestError) {
-                        return Center(
-                          child: Container(
-                            margin: const EdgeInsets.all(24),
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.red.withOpacity(0.3))),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 48),
-                                const SizedBox(height: 12),
-                                Text('SYSTEM OVERLOAD: ${state.message}', style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                              ],
-                            ),
-                          ),
-                        );
+                      
+                      // Handle transitions based on status changes of loaded requests
+                      if (state is HelperRequestsLoaded) {
+                        final accepted = state.requests.any((r) => r.status == 'accepted');
+                        final pending = state.requests.any((r) => r.status == 'pending');
+                        
+                        // If we are on the UPLINKS tab (0) and there are no pendings but there are accepteds, move to missions
+                        if (_tabController.index == 0 && !pending && accepted) {
+                          _tabController.animateTo(1);
+                        }
                       }
-                      return const Center(child: CircularProgressIndicator(color: neonCyan));
                     },
+                    child: BlocBuilder<HelpRequestBloc, HelpRequestState>(
+                      builder: (context, state) {
+                        if (state is HelperRequestsLoaded) {
+                          final reqs = state.requests;
+                          return TabBarView(
+                            controller: _tabController,
+                            children: [
+                              _buildRequestList(reqs.where((r) => r.status == 'pending').toList(), 'NO PENDING UPLINKS'),
+                              _buildRequestList(reqs.where((r) => r.status == 'accepted').toList(), 'NO ACTIVE MISSIONS'),
+                              _buildRequestList(reqs.where((r) => r.status == 'completed').toList(), 'ARCHIVES EMPTY'),
+                              _buildRequestList(reqs.where((r) => r.status == 'rejected').toList(), 'REJECTIONS LOGS CLEAR'),
+                            ],
+                          );
+                        }
+                        if (state is HelpRequestError) {
+                          return Center(
+                            child: Container(
+                              margin: const EdgeInsets.all(24),
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.red.withOpacity(0.3))),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 48),
+                                  const SizedBox(height: 12),
+                                  Text('SYSTEM OVERLOAD: ${state.message}', style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+                        return const Center(child: CircularProgressIndicator(color: neonCyan));
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -246,20 +275,36 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
   }
 
   Widget _buildRequestList(List<HelpRequestModel> list, String emptyMessage) {
-    if (list.isEmpty) {
-      return Center(
-        child: Text(
-          emptyMessage,
-          style: const TextStyle(color: Colors.grey, fontSize: 16),
-        ),
-      );
-    }
-    return ListView.builder(
-      itemCount: list.length,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemBuilder: (context, index) {
-        return _buildRequestCard(list[index]);
+    return RefreshIndicator(
+      onRefresh: () async {
+        if (_helperId != null) {
+          context.read<HelpRequestBloc>().add(ListenForHelperMatches(_helperId!));
+        }
+        await Future.delayed(const Duration(milliseconds: 500));
       },
+      color: neonCyan,
+      backgroundColor: darkBg,
+      child: list.isEmpty
+          ? SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.6,
+                child: Center(
+                  child: Text(
+                    emptyMessage,
+                    style: const TextStyle(color: Colors.grey, fontSize: 16),
+                  ),
+                ),
+              ),
+            )
+          : ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: list.length,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemBuilder: (context, index) {
+                return _buildRequestCard(list[index]);
+              },
+            ),
     );
   }
 
@@ -339,14 +384,13 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
                     ),
                   ),
                 ],
-                
                 const SizedBox(height: 24),
                 if (isPending)
                   Row(
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => context.read<HelpRequestBloc>().add(RejectRequest(request.id)),
+                          onPressed: () => context.read<HelpRequestBloc>().add(RejectRequest(requestId: request.id, victimId: request.victimId, matchedId: request.matchedId)),
                           style: OutlinedButton.styleFrom(foregroundColor: neonOrange, side: const BorderSide(color: neonOrange), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                           child: const Text('DECLINE', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2)),
                         ),

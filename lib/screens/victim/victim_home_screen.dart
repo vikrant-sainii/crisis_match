@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
@@ -22,8 +21,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../../widgets/chat_bubble.dart';
 import '../../widgets/status_badge.dart';
-import '../../widgets/sos_capture_overlay.dart';
-import '../../widgets/wake_word_dialog.dart';
 import 'victim_map_screen.dart';
 import 'voice_assistant_screen.dart';
 import '../../repositories/help_request_repository.dart';
@@ -53,8 +50,6 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
   // Location streaming for real-time tracking
   StreamSubscription<Position>? _positionStream;
 
-  // Speech to Text
-  late stt.SpeechToText _speech;
   bool _isListening = false;
   bool _wasVoiced = false; // Flag to track if the current message started as voice
 
@@ -85,7 +80,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
 
     context.read<LocationBloc>().add(GetCurrentLocation());
 
-    _speech = stt.SpeechToText();
+
     _audioPlayer = AudioPlayer();
 
     final authState = context.read<AuthBloc>().state;
@@ -94,6 +89,12 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
         LoadActiveRequest(authState.profile.id),
       );
       context.read<AdminBloc>().add(LoadAdminData());
+
+      // Check if there's already an active request in the current state to sync chat immediately
+      final helpState = context.read<HelpRequestBloc>().state;
+      if (helpState is HelpRequestAccepted) {
+        context.read<ChatBloc>().add(LoadMessages(helpState.request.id));
+      }
 
       // Create SOS BLoC with victim's ID
       _sosBloc = SosBloc(
@@ -145,13 +146,12 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
 
   void _listen() async {
     // Instead of using local _speech, instantly trigger the SOS Engine Guardian!
-    _sosBloc?.add(SosPowerButtonTriggered());
+    _sosBloc?.add(StartSosCapture());
   }
 
   void _stopListening() {
-    // Legacy mapping (no longer needed, VoiceAssistantScreen handles closing)
+    // Legacy mapping (no longer needed, VoiceAssistantScreen handles captures)
     if (_isListening) {
-      _speech.stop();
       setState(() => _isListening = false);
     }
   }
@@ -168,23 +168,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
     });
   }
 
-  void _startTimeoutTimer() {
-    _timeoutTimer?.cancel();
-    _timeoutTimer = Timer(const Duration(minutes: 5), () {
-      if (mounted) {
-        setState(() {
-          final state = context.read<HelpRequestBloc>().state;
-          if (state is HelpRequestActive && state.request.status == 'pending') {
-            context.read<HelpRequestBloc>().add(
-              RejectRequest(state.request.id),
-            );
-          }
-          _canRetry = true;
-        });
-      }
-    });
-  }
-
+  // Refactored: Timer logic moved to HelpRequestBloc for stream-first reliability.
   void _sendToN8n() {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
@@ -224,7 +208,6 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
         isVoice: isVoice,
       ),
     );
-    _startTimeoutTimer();
   }
 
   void _sendToHelper() {
@@ -356,40 +339,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
         ),
       );
     }
-    if (state is SosResponseState) {
-      // Play voice response
-      if (state.audioPath != null) {
-        _audioPlayer.play(DeviceFileSource(state.audioPath!));
-      }
-
-      // Add AI reply to local chat messages
-      setState(() {
-        _localAiMessages.add({'role': 'bot', 'message': state.voiceReply});
-      });
-      _scrollToBottom(_n8nScrollController);
-
-      // If a helper was matched, hand off to HelpRequestBloc
-      if (state.matchData != null) {
-        final authState = context.read<AuthBloc>().state;
-        if (authState is AuthAuthenticated) {
-          context.read<HelpRequestBloc>().add(
-                LoadActiveRequest(authState.profile.id),
-              );
-        }
-      }
-
-      // Show snackbar
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            state.matchData != null
-                ? 'SOS PROCESSED — HELPER MATCHED'
-                : 'SOS PROCESSED — AWAITING MATCH',
-          ),
-          backgroundColor: state.matchData != null ? neonCyan : neonOrange,
-        ),
-      );
-    }
+    
     if (state is SosError) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -398,7 +348,9 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
         ),
       );
     }
+    // Handoff to HelpRequestBloc is now managed in VoiceAssistantScreen listener
   }
+  
 
   Widget _buildCyberHeader() {
     return Container(
@@ -508,7 +460,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                     color: shieldColor,
                     size: 22,
                   ),
-                  if (isActive && sosState is SosListening && sosState.gZ != null) ...[
+                  if (isActive && sosState.gZ != null) ...[
                     const SizedBox(height: 4),
                     Text(
                       'Z: ${sosState.gZ!.toStringAsFixed(2)}g',
@@ -604,9 +556,6 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
           setState(() => _canRetry = true);
         }
         if (state is HelpRequestPending) {
-          if (_timeoutTimer == null || !_timeoutTimer!.isActive) {
-            _startTimeoutTimer();
-          }
           _startVictimLocationPush(state.request.id);
         }
         if (state is HelpRequestInitial || state is HelpRequestResolved) {
@@ -1187,48 +1136,60 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
           );
         }
 
-        return ListView.builder(
-          itemCount: history.length,
-          padding: const EdgeInsets.all(16),
-          itemBuilder: (context, index) {
-            final req = history[index];
-            final isCompleted = req.status == 'completed';
-            final color = isCompleted ? Colors.greenAccent : neonOrange;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: slatePanel.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: color.withOpacity(0.2)),
-              ),
-              child: ListTile(
-                leading: Icon(
-                  isCompleted
-                      ? Icons.check_circle_outline_rounded
-                      : Icons.history_toggle_off_rounded,
-                  color: color,
-                ),
-                title: Text(
-                  req.crisisType.toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1,
-                    fontSize: 14,
-                  ),
-                ),
-                subtitle: Text(
-                  'RESPONDER: ${req.helperName ?? "ANON"}',
-                  style: TextStyle(
-                    color: Colors.blueGrey.shade400,
-                    fontSize: 11,
-                  ),
-                ),
-                trailing: StatusBadge(status: req.status),
-                onTap: req.txHash != null ? () => _launchTx(req.txHash!) : null,
-              ),
-            );
+        return RefreshIndicator(
+          onRefresh: () async {
+            final authState = context.read<AuthBloc>().state;
+            if (authState is AuthAuthenticated) {
+              setState(() {}); // Trigger FutureBuilder reload
+            }
+            await Future.delayed(const Duration(milliseconds: 500));
           },
+          color: neonCyan,
+          backgroundColor: darkBg,
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            itemCount: history.length,
+            padding: const EdgeInsets.all(16),
+            itemBuilder: (context, index) {
+              final req = history[index];
+              final isCompleted = req.status == 'completed';
+              final color = isCompleted ? Colors.greenAccent : neonOrange;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: slatePanel.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: color.withOpacity(0.2)),
+                ),
+                child: ListTile(
+                  leading: Icon(
+                    isCompleted
+                        ? Icons.check_circle_outline_rounded
+                        : Icons.history_toggle_off_rounded,
+                    color: color,
+                  ),
+                  title: Text(
+                    req.crisisType.toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1,
+                      fontSize: 14,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'RESPONDER: ${req.helperName ?? "ANON"}',
+                    style: TextStyle(
+                      color: Colors.blueGrey.shade400,
+                      fontSize: 11,
+                    ),
+                  ),
+                  trailing: StatusBadge(status: req.status),
+                  onTap: req.txHash != null ? () => _launchTx(req.txHash!) : null,
+                ),
+              );
+            },
+          ),
         );
       },
     );

@@ -32,31 +32,17 @@ class SosCapturing extends SosState {
   @override
   List<Object?> get props => [liveText];
 }
-
-/// Distress captured, calling n8n webhooks
-class SosSending extends SosState {
+/// New terminal state: Voice message captured, ready for handoff
+class SosCaptured extends SosState {
   final String message;
-  const SosSending(this.message);
+  const SosCaptured(this.message);
 
   @override
   List<Object?> get props => [message];
 }
 
-/// Got response from n8n — voice reply and/or helper match
-class SosResponseState extends SosState {
-  final String voiceReply;
-  final String? audioPath;
-  final Map<String, dynamic>? matchData;
-
-  const SosResponseState({
-    required this.voiceReply,
-    this.audioPath,
-    this.matchData,
-  });
-
-  @override
-  List<Object?> get props => [voiceReply, audioPath, matchData];
-}
+/// Recording ended but no speech was recognized
+class SosNoCapture extends SosState {}
 
 /// Something went wrong
 class SosError extends SosState {

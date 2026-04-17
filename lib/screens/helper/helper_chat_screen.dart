@@ -10,7 +10,6 @@ import '../../blocs/help_request/help_request_bloc.dart';
 import '../../blocs/help_request/help_request_event.dart';
 import '../../blocs/help_request/help_request_state.dart';
 import '../../models/help_request_model.dart';
-import '../../repositories/chat_repository.dart';
 import '../../widgets/chat_bubble.dart';
 import 'helper_map_screen.dart';
 
@@ -28,7 +27,6 @@ class HelperChatScreen extends StatefulWidget {
 class _HelperChatScreenState extends State<HelperChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
-  late final ChatBloc _chatBloc;
   String _victimName = 'Victim';
 
   // 🌃 CYBER-DARK THEME CONSTANTS
@@ -39,12 +37,11 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
   @override
   void initState() {
     super.initState();
-    // Create a LOCAL ChatBloc instance for this specific request
-    _chatBloc = ChatBloc(
-      repository: context.read<ChatRepository>(),
-    );
+    
+    // Use the GLOBAL ChatBloc from context
     // Load existing messages and subscribe to realtime updates
-    _chatBloc.add(LoadMessages(widget.request.id));
+    context.read<ChatBloc>().add(LoadMessages(widget.request.id));
+    
     // Fetch victim's name from profiles
     _fetchVictimName();
   }
@@ -68,7 +65,6 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
-    _chatBloc.close();
     super.dispose();
   }
 
@@ -89,7 +85,7 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return;
 
-    _chatBloc.add(SendMessage(
+    context.read<ChatBloc>().add(SendMessage(
       requestId: widget.request.id,
       senderId: authState.profile.id,
       senderRole: 'helper',
@@ -102,13 +98,11 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider.value(
-      value: _chatBloc,
-      child: Scaffold(
-        backgroundColor: darkBg,
-        body: SafeArea(
-          child: Column(
-            children: [
+    return Scaffold(
+      backgroundColor: darkBg,
+      body: SafeArea(
+        child: Column(
+          children: [
               // 🛰 CYBER COMMS HEADER
               _buildCyberChatHeader(),
 
@@ -129,7 +123,6 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
                       ),
                     ),
                     BlocBuilder<ChatBloc, ChatState>(
-                      bloc: _chatBloc,
                       builder: (context, state) {
                         if (state is ChatLoaded) {
                           final authState = context.read<AuthBloc>().state;
@@ -186,7 +179,6 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
             ],
           ),
         ),
-      ),
     );
   }
 

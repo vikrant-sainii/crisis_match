@@ -2,10 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:audioplayers/audioplayers.dart';
 import '../../repositories/help_request_repository.dart';
 import '../../services/sos_foreground_service.dart';
 import 'sos_event.dart';
@@ -31,9 +28,10 @@ class SosBloc extends Bloc<SosEvent, SosState> {
 
     on<EnableSos>(_onEnableSos);
     on<DisableSos>(_onDisableSos);
-    on<SosPowerButtonTriggered>(_onPowerButtonTriggered);
+    on<StartSosCapture>(_onStartSosCapture);
+    on<RetrySosCapture>(_onRetrySosCapture);
+    on<SosNoMessageDetected>((event, emit) => emit(SosNoCapture()));
     on<DistressCaptured>(_onDistressCaptured);
-    on<SosResponseReceived>(_onSosResponseReceived);
     on<SensorDebugDataReceived>(_onSensorDebugDataReceived);
     on<SosLiveTextUpdated>((event, emit) {
       if (state is SosCapturing) {
@@ -45,7 +43,7 @@ class SosBloc extends Bloc<SosEvent, SosState> {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'sosTrigger') {
         developer.log('SosBloc: MethodChannel received "sosTrigger"!');
-        add(SosPowerButtonTriggered());
+        add(StartSosCapture());
       } else if (call.method == 'sensorDebug') {
         final data = call.arguments as Map<Object?, Object?>?;
         if (data != null) {
@@ -96,34 +94,16 @@ class SosBloc extends Bloc<SosEvent, SosState> {
     developer.log('SosBloc: SOS disabled');
   }
 
-  Future<void> _onPowerButtonTriggered(
-      SosPowerButtonTriggered event, Emitter<SosState> emit) async {
-    developer.log('SosBloc: _onPowerButtonTriggered — Starting Phase 2 flow');
+  Future<void> _onStartSosCapture(
+      StartSosCapture event, Emitter<SosState> emit) async {
+    developer.log('SosBloc: _onStartSosCapture — Starting Phase 2 flow');
 
     emit(SosActivated());
 
     // 1. Play "ding" sound to signal trigger start
     SystemSound.play(SystemSoundType.click);
 
-    // 2. Call n8n TTS: "You can speak now. Describe your emergency."
-    try {
-      final ttsPath = await _repository.triggerTTS(
-          "You can speak now. Describe your emergency.");
-      
-      if (ttsPath != null) {
-        final player = AudioPlayer();
-        await player.play(DeviceFileSource(ttsPath));
-        // Wait for the audio to finish (with 5s max timeout)
-        await player.onPlayerComplete.first
-            .timeout(const Duration(seconds: 5), onTimeout: () {});
-        await player.dispose();
-      }
-    } catch (e) {
-      developer.log('SosBloc: TTS playback error: $e');
-      // Continue anyway
-    }
-
-    // 3. Start 8-second STT recording immediately after TTS
+    // 2. Start STT recording immediately
     await _startPhase2(emit);
   }
 
@@ -172,7 +152,6 @@ class SosBloc extends Bloc<SosEvent, SosState> {
       _endPhase2();
     });
   }
-
   void _endPhase2() {
     _silenceTimer?.cancel();
     _failsafeTimer?.cancel();
@@ -183,89 +162,28 @@ class SosBloc extends Bloc<SosEvent, SosState> {
 
     SystemSound.play(SystemSoundType.click);
 
-    final msg = _capturedMessage.trim().isNotEmpty
-        ? _capturedMessage.trim()
-        : 'Emergency SOS — no message captured';
+    final cleanMsg = _capturedMessage.trim();
+    if (cleanMsg.isEmpty || cleanMsg.length < 5) {
+      developer.log('SosBloc: No valid message captured (got: "$cleanMsg"). Triggering Try Again.');
+      add(SosNoMessageDetected());
+    } else {
+      developer.log('SosBloc: Captured final distress: "$cleanMsg"');
+      add(DistressCaptured(cleanMsg));
+    }
+  }
 
-    developer.log('SosBloc: Captured final: "$msg"');
-    add(DistressCaptured(msg));
+  void _onRetrySosCapture(RetrySosCapture event, Emitter<SosState> emit) {
+    developer.log('SosBloc: User requested retry. Restarting mic...');
+    _capturedMessage = "";
+    _startPhase2(emit);
   }
 
   Future<void> _onDistressCaptured(
       DistressCaptured event, Emitter<SosState> emit) async {
-    developer.log('SosBloc: Distress message: "${event.message}"');
-    emit(SosSending(event.message));
-
-    try {
-      // Auto-grab GPS
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings:
-            const LocationSettings(accuracy: LocationAccuracy.high),
-      );
-      final lat = position.latitude;
-      final lng = position.longitude;
-
-      developer.log('SosBloc: GPS: $lat, $lng');
-
-      // Call BOTH existing webhooks in parallel
-      final matcherFuture = _repository
-          .triggerN8nInitialSearch(
-        message: event.message,
-        victimId: victimId,
-        lat: lat,
-        lng: lng,
-      )
-          .catchError((e) {
-        developer.log('SosBloc: Matcher error: $e');
-        return <String, dynamic>{'error': e.toString()};
-      });
-
-      final voiceFuture = _repository
-          .triggerN8nVoiceAssist(
-        message: event.message,
-        victimId: victimId,
-        lat: lat,
-        lng: lng,
-      )
-          .catchError((e) {
-        developer.log('SosBloc: Voice Assist error: $e');
-        return <String, dynamic>{
-          'reply': 'SOS received. Locating help nearby.',
-          'audioPath': null,
-        };
-      });
-
-      final results = await Future.wait([matcherFuture, voiceFuture]);
-      final matcherResponse = results[0];
-      final voiceResponse = results[1];
-
-      // Build match data if a helper was found
-      Map<String, dynamic>? matchData;
-      if (matcherResponse.containsKey('matched_id') &&
-          matcherResponse.containsKey('request_id')) {
-        matchData = matcherResponse;
-      }
-
-      emit(SosResponseState(
-        voiceReply: voiceResponse['reply'] ?? 'SOS received.',
-        audioPath: voiceResponse['audioPath'] as String?,
-        matchData: matchData,
-      ));
-
-      developer.log('SosBloc: SOS response emitted. Match: ${matchData != null}');
-    } catch (e) {
-      developer.log('SosBloc: SOS processing error: $e');
-      emit(SosError('SOS sent but failed to process: $e'));
-    }
-  }
-
-  void _onSosResponseReceived(
-      SosResponseReceived event, Emitter<SosState> emit) {
-    emit(SosResponseState(
-      voiceReply: event.voiceReply ?? 'SOS processed.',
-      audioPath: event.audioPath,
-      matchData: event.matchData,
-    ));
+    developer.log('SosBloc: Distress message captured: "${event.message}"');
+    
+    // Terminal state for this Bloc — signal UI to hand off to HelpRequestBloc
+    emit(SosCaptured(event.message));
   }
 
   @override

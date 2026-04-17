@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../blocs/sos/sos_bloc.dart';
-import '../../blocs/sos/sos_event.dart';
 import '../../blocs/sos/sos_state.dart';
+import '../../blocs/sos/sos_event.dart';
+import '../../blocs/help_request/help_request_bloc.dart';
+import '../../blocs/help_request/help_request_event.dart';
+import '../../blocs/location/location_bloc.dart';
+import '../../blocs/location/location_state.dart';
+import '../../blocs/auth/auth_bloc.dart';
+import '../../blocs/auth/auth_state.dart';
 
 class VoiceAssistantScreen extends StatefulWidget {
   const VoiceAssistantScreen({super.key});
@@ -38,13 +44,25 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
         listener: (context, state) {
           if (state is SosDisabled) {
             Navigator.of(context).pop();
-          } else if (state is SosResponseState) {
-            // Auto close slightly after response arrives to show the Chat
-            Future.delayed(const Duration(seconds: 2), () {
-              if (mounted && Navigator.of(context).canPop()) {
-                Navigator.of(context).pop();
-              }
-            });
+          } else if (state is SosCaptured) {
+            // THE CRITICAL HANDOFF: Pass captured message to the main app dashboard
+            final authState = context.read<AuthBloc>().state;
+            final locationState = context.read<LocationBloc>().state;
+
+            if (authState is AuthAuthenticated && locationState is LocationLoaded) {
+              context.read<HelpRequestBloc>().add(
+                FindHelper(
+                  message: state.message,
+                  victimId: authState.profile.id,
+                  lat: locationState.lat,
+                  lng: locationState.lng,
+                  isVoice: true,
+                ),
+              );
+            }
+
+            // Close the voice UI so they can see the Chat/Map dashboard
+            Navigator.of(context).pop();
           }
         },
         builder: (context, state) {
@@ -60,13 +78,14 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
             header = "Listening...";
             liveText = state.liveText.trim().isEmpty ? "..." : state.liveText;
             isListening = true;
-          } else if (state is SosSending) {
-            header = "Processing...";
-            liveText = state.message;
+          } else if (state is SosCaptured) {
+            header = "Mission Accepted";
+            liveText = "Sending: ${state.message}";
             isThinking = true;
-          } else if (state is SosResponseState) {
-            header = "Helper Responded";
-            liveText = state.voiceReply;
+          } else if (state is SosNoCapture) {
+            header = "No Message Found";
+            liveText = "I didn't catch that. Please try again.";
+            isListening = false;
           } else if (state is SosError) {
              header = "Error";
              liveText = state.message;
@@ -149,7 +168,31 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
                         ),
                       ),
                     ),
-
+                    const SizedBox(height: 32),
+                    if (state is SosNoCapture)
+                      Center(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            context.read<SosBloc>().add(RetrySosCapture());
+                          },
+                          icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
+                          label: const Text(
+                            "TRY AGAIN",
+                            style: TextStyle(
+                              color: Colors.white,
+                              letterSpacing: 2,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.white24),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                        ),
+                      ),
                     const Expanded(flex: 4, child: SizedBox()),
                   ],
                 ),

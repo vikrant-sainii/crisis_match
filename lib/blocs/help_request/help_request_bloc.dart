@@ -246,22 +246,23 @@ class HelpRequestBloc extends Bloc<HelpRequestEvent, HelpRequestState> {
     try {
       final request = await _repository.getActiveRequest(event.victimId);
       if (request != null) {
-        if (request.status == 'accepted' || request.status == 'pending') {
-          _currentActiveRequest = request;
-        }
-
+        _currentActiveRequest = request;
         if (request.status == 'accepted') {
           emit(HelpRequestAccepted(request, distance: "In Progress"));
         } else if (request.status == 'pending') {
           emit(HelpRequestPending(request, distance: "Awaiting Response"));
+        } else {
+          // If it's something else like 'completed' or 'rejected', revert to initial
+          _currentActiveRequest = null;
+          emit(HelpRequestInitial());
         }
       } else {
         _currentActiveRequest = null;
-        // Explicitly stay in Initial if no active request found
         emit(HelpRequestInitial());
       }
     } catch (e) {
-      emit(HelpRequestError(e.toString()));
+      developer.log('HelpRequestBloc: Error in _onLoadActiveRequest: $e');
+      emit(HelpRequestError("Secure Link Initialization Failed: $e"));
     }
   }
 
@@ -300,10 +301,20 @@ class HelpRequestBloc extends Bloc<HelpRequestEvent, HelpRequestState> {
 
   Future<void> _onRejectRequest(RejectRequest event, Emitter<HelpRequestState> emit) async {
     try {
+      // 1. Update status to rejected
       await _repository.updateStatus(event.requestId, 'rejected');
+      
+      // 2. Trigger n8n retry if matchedId exists
+      if (event.matchedId != null && event.matchedId!.isNotEmpty) {
+        await _repository.triggerN8nRetrySearch(
+          matchedId: event.matchedId!,
+          victimId: event.victimId,
+        );
+      }
+      // Local UI will refresh via stream subscriptions
     } catch (e) {
       emit(HelpRequestError(e.toString()));
-    }
+    } 
   }
 
   Future<void> _onResolveRequest(ResolveRequest event, Emitter<HelpRequestState> emit) async {
@@ -353,10 +364,11 @@ class HelpRequestBloc extends Bloc<HelpRequestEvent, HelpRequestState> {
       // 🛡️ STALE REJECTION GUARD: If app just opened (Initial), ignore old rejected rows
       if (state is HelpRequestInitial) return;
 
-      // Auto-trigger retry if we have a matchedId pointer
+      // Auto-trigger retry if we have a matchedId pointer (Victim flow)
       if (mId != null) {
         add(RetryFindHelper(matchedId: mId, victimId: request.victimId));
       } else {
+        // If no pointer, just show rejection (Helper flow)
         emit(HelpRequestRejected(request, matchedId: mId, distance: dist));
       }
     } else if (request.status == 'completed') {
@@ -366,10 +378,14 @@ class HelpRequestBloc extends Bloc<HelpRequestEvent, HelpRequestState> {
     } else if (request.status == 'spam' || request.status == 'blocked') {
       _matchingTimer?.cancel();
       _currentActiveRequest = null;
-      emit(HelpRequestError("This request has been flagged as suspicious by the system."));
-    } else {
+      emit(HelpRequestError("This communication has been flagged for security review."));
+    } else if (request.status == 'pending') {
       _currentActiveRequest = request;
       emit(HelpRequestPending(request, matchedId: mId, distance: dist));
+    } else {
+       // Catch-all for other states (e.g. idle or cancelled)
+      _currentActiveRequest = null;
+      emit(HelpRequestInitial());
     }
   }
 

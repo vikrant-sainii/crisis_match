@@ -22,8 +22,14 @@ class SosLiveTextUpdated extends SosEvent {
   List<Object?> get props => [text];
 }
 
-/// Device power button pressed 3 times
-class SosPowerButtonTriggered extends SosEvent {}
+/// Hardware/Sensor shake trigger detected
+class StartSosCapture extends SosEvent {}
+
+/// User wants to try recording again
+class RetrySosCapture extends SosEvent {}
+
+/// Internal event: Recording ended without recognized speech
+class SosNoMessageDetected extends SosEvent {}
 
 /// 10-second distress recording is complete
 class DistressCaptured extends SosEvent {
@@ -34,21 +40,7 @@ class DistressCaptured extends SosEvent {
   List<Object?> get props => [message];
 }
 
-/// n8n responded with match data and/or voice reply
-class SosResponseReceived extends SosEvent {
-  final String? voiceReply;
-  final String? audioPath;
-  final Map<String, dynamic>? matchData;
 
-  const SosResponseReceived({
-    this.voiceReply,
-    this.audioPath,
-    this.matchData,
-  });
-
-  @override
-  List<Object?> get props => [voiceReply, audioPath, matchData];
-}
 
 /// New event to pipe background sensor values for testing
 class SensorDebugDataReceived extends SosEvent {
