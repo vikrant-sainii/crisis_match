@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1013529610451",
+    "project_id": "crisis-match",
+    "storage_bucket": "crisis-match.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1013529610451:android:cdafa182ca0df3d3ad6c26",
+        "android_client_info": {
+          "package_name": "com.example.crisis_final_repo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBCBxA93-ml62iwhlcgLg-lnZ07NdOYu0Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

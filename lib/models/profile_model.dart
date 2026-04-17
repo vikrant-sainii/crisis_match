@@ -10,6 +10,7 @@ class ProfileModel extends Equatable {
   final DateTime? createdAt;
   final bool isBlocked;
   final DateTime? blockedUntil;
+  final String? fcmToken;
 
   const ProfileModel({
     required this.id,
@@ -21,6 +22,7 @@ class ProfileModel extends Equatable {
     this.createdAt,
     this.isBlocked = false,
     this.blockedUntil,
+    this.fcmToken,
   });
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
@@ -38,6 +40,7 @@ class ProfileModel extends Equatable {
       blockedUntil: json['blocked_until'] != null
           ? DateTime.parse(json['blocked_until'] as String)
           : null,
+      fcmToken: json['fcm_token'] as String?,
     );
   }
 
@@ -51,12 +54,13 @@ class ProfileModel extends Equatable {
       'avatar_url': avatarUrl,
       'is_blocked': isBlocked,
       'blocked_until': blockedUntil?.toIso8601String(),
+      'fcm_token': fcmToken,
     };
   }
 
   @override
   List<Object?> get props =>
-      [id, role, fullName, email, phone, avatarUrl, createdAt, isBlocked, blockedUntil];
+      [id, role, fullName, email, phone, avatarUrl, createdAt, isBlocked, blockedUntil, fcmToken];
 
   ProfileModel copyWith({
     String? fullName,
@@ -64,6 +68,7 @@ class ProfileModel extends Equatable {
     String? avatarUrl,
     bool? isBlocked,
     DateTime? blockedUntil,
+    String? fcmToken,
   }) {
     return ProfileModel(
       id: id,
@@ -75,6 +80,7 @@ class ProfileModel extends Equatable {
       createdAt: createdAt,
       isBlocked: isBlocked ?? this.isBlocked,
       blockedUntil: blockedUntil ?? this.blockedUntil,
+      fcmToken: fcmToken ?? this.fcmToken,
     );
   }
 }
