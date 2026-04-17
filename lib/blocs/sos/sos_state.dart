@@ -24,13 +24,13 @@ class SosListening extends SosState {
 /// Wake word detected — app launched to foreground
 class SosActivated extends SosState {}
 
-/// Recording the victim's distress message (10-second capture)
+/// Recording the victim's distress message (dynamic capturing)
 class SosCapturing extends SosState {
-  final int secondsRemaining;
-  const SosCapturing(this.secondsRemaining);
+  final String liveText;
+  const SosCapturing(this.liveText);
 
   @override
-  List<Object?> get props => [secondsRemaining];
+  List<Object?> get props => [liveText];
 }
 
 /// Distress captured, calling n8n webhooks

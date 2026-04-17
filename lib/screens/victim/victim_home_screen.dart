@@ -25,6 +25,7 @@ import '../../widgets/status_badge.dart';
 import '../../widgets/sos_capture_overlay.dart';
 import '../../widgets/wake_word_dialog.dart';
 import 'victim_map_screen.dart';
+import 'voice_assistant_screen.dart';
 import '../../repositories/help_request_repository.dart';
 import '../../models/help_request_model.dart';
 import '../../blocs/admin/admin_bloc.dart';
@@ -143,30 +144,12 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
   }
 
   void _listen() async {
-    if (!_isListening) {
-      bool available = await _speech.initialize(
-        onStatus: (val) => debugPrint('onStatus: $val'),
-        onError: (val) => debugPrint('onError: $val'),
-      );
-      if (available) {
-        setState(() {
-          _isListening = true;
-          _wasVoiced = true; // Mark that we are using voice
-        });
-        _speech.listen(
-          onResult: (val) => setState(() {
-            _messageController.text = val.recognizedWords;
-            // Optional: if (val.hasConfidenceRating && val.confidence > 0)
-          }),
-        );
-      }
-    } else {
-      setState(() => _isListening = false);
-      _speech.stop();
-    }
+    // Instead of using local _speech, instantly trigger the SOS Engine Guardian!
+    _sosBloc?.add(SosPowerButtonTriggered());
   }
 
   void _stopListening() {
+    // Legacy mapping (no longer needed, VoiceAssistantScreen handles closing)
     if (_isListening) {
       _speech.stop();
       setState(() => _isListening = false);
@@ -347,30 +330,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                   ],
                 ),
 
-                // SOS Capture Overlay (shown during distress recording)
-                BlocBuilder<SosBloc, SosState>(
-                  builder: (context, sosState) {
-                    if (sosState is SosCapturing) {
-                      return SosCaptureOverlay(
-                        secondsRemaining: sosState.secondsRemaining,
-                        onCancel: () => _sosBloc!.add(DisableSos()),
-                      );
-                    }
-                    if (sosState is SosActivated) {
-                      return const SosCaptureOverlay(
-                        secondsRemaining: 10,
-                        statusText: 'SOS ACTIVATED — PREPARING CAPTURE...',
-                      );
-                    }
-                    if (sosState is SosSending) {
-                      return SosCaptureOverlay(
-                        secondsRemaining: 0,
-                        statusText: 'TRANSMITTING: "${sosState.message}"',
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                ),
+
               ],
             ),
           ),
@@ -380,6 +340,22 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
   }
 
   void _onSosStateChanged(BuildContext context, SosState state) {
+    if (state is SosActivated) {
+      // Instantly pop up the Google Assistant interface
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (pageContext, animation, secondaryAnimation) => 
+              BlocProvider.value(
+                value: context.read<SosBloc>(),
+                child: const VoiceAssistantScreen(),
+              ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
+      );
+    }
     if (state is SosResponseState) {
       // Play voice response
       if (state.audioPath != null) {

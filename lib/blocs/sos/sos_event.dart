@@ -13,6 +13,15 @@ class EnableSos extends SosEvent {}
 /// User toggles SOS listening OFF
 class DisableSos extends SosEvent {}
 
+/// Live transcription update during capture
+class SosLiveTextUpdated extends SosEvent {
+  final String text;
+  const SosLiveTextUpdated(this.text);
+
+  @override
+  List<Object?> get props => [text];
+}
+
 /// Device power button pressed 3 times
 class SosPowerButtonTriggered extends SosEvent {}
 

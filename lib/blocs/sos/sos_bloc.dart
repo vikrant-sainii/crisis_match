@@ -16,8 +16,8 @@ class SosBloc extends Bloc<SosEvent, SosState> {
   final String victimId;
 
   late stt.SpeechToText _speech;
-  Timer? _captureTimer;
-  int _captureCountdown = 8;
+  Timer? _silenceTimer;
+  Timer? _failsafeTimer;
   String _capturedMessage = '';
 
   static const _channel = MethodChannel('com.crismatch.sos/trigger');
@@ -35,6 +35,11 @@ class SosBloc extends Bloc<SosEvent, SosState> {
     on<DistressCaptured>(_onDistressCaptured);
     on<SosResponseReceived>(_onSosResponseReceived);
     on<SensorDebugDataReceived>(_onSensorDebugDataReceived);
+    on<SosLiveTextUpdated>((event, emit) {
+      if (state is SosCapturing) {
+        emit(SosCapturing(event.text));
+      }
+    });
 
     // Always listen to MethodChannel triggers, in case app was launched from a dead state
     _channel.setMethodCallHandler((call) async {
@@ -83,7 +88,8 @@ class SosBloc extends Bloc<SosEvent, SosState> {
   }
 
   Future<void> _onDisableSos(DisableSos event, Emitter<SosState> emit) async {
-    _captureTimer?.cancel();
+    _silenceTimer?.cancel();
+    _failsafeTimer?.cancel();
     try { _speech.stop(); } catch (_) {}
     await SosForegroundService.stopService();
     emit(SosDisabled());
@@ -122,19 +128,38 @@ class SosBloc extends Bloc<SosEvent, SosState> {
   }
 
   Future<void> _startPhase2(Emitter<SosState> emit) async {
-    developer.log('SosBloc: Starting Phase 2 — STT recording');
+    developer.log('SosBloc: Starting Phase 2 — STT dynamic recording');
 
     _capturedMessage = '';
-    _captureCountdown = 8;
-    emit(SosCapturing(_captureCountdown));
+    emit(const SosCapturing(''));
+
+    // Cancel old timers
+    _silenceTimer?.cancel();
+    _failsafeTimer?.cancel();
+
+    // Ensure STT is mounted
+    if (!_speech.isAvailable) {
+      await _speech.initialize(
+        onStatus: (s) => developer.log('SosBloc: STT status: $s'),
+        onError: (e) => developer.log('SosBloc: STT error: ${e.errorMsg}'),
+      );
+    }
 
     _speech.listen(
       onResult: (result) {
         _capturedMessage = result.recognizedWords;
         developer.log('SosBloc: Capturing: "$_capturedMessage"');
+        
+        // Push the update to UI
+        add(SosLiveTextUpdated(_capturedMessage));
+
+        // 1.5 second rolling silence detection
+        _silenceTimer?.cancel();
+        _silenceTimer = Timer(const Duration(milliseconds: 1500), () {
+          _endPhase2();
+        });
       },
-      listenFor: const Duration(seconds: 8),
-      pauseFor: const Duration(seconds: 8), // Keep listening for the whole 8s
+      listenFor: const Duration(seconds: 30),
       listenOptions: stt.SpeechListenOptions(
         cancelOnError: false,
         listenMode: stt.ListenMode.dictation,
@@ -142,24 +167,28 @@ class SosBloc extends Bloc<SosEvent, SosState> {
       ),
     );
 
-    _captureTimer?.cancel();
-    _captureTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _captureCountdown--;
-      emit(SosCapturing(_captureCountdown));
-      if (_captureCountdown <= 0) {
-        timer.cancel();
-        _speech.stop();
-
-        SystemSound.play(SystemSoundType.click);
-
-        final msg = _capturedMessage.trim().isNotEmpty
-            ? _capturedMessage.trim()
-            : 'Emergency SOS — no message captured';
-
-        developer.log('SosBloc: Captured final: "$msg"');
-        add(DistressCaptured(msg));
-      }
+    // 7-second absolute failsafe (in case they never speak at all or speech hangs)
+    _failsafeTimer = Timer(const Duration(seconds: 7), () {
+      _endPhase2();
     });
+  }
+
+  void _endPhase2() {
+    _silenceTimer?.cancel();
+    _failsafeTimer?.cancel();
+    
+    try {
+      _speech.stop();
+    } catch (_) {}
+
+    SystemSound.play(SystemSoundType.click);
+
+    final msg = _capturedMessage.trim().isNotEmpty
+        ? _capturedMessage.trim()
+        : 'Emergency SOS — no message captured';
+
+    developer.log('SosBloc: Captured final: "$msg"');
+    add(DistressCaptured(msg));
   }
 
   Future<void> _onDistressCaptured(
@@ -241,7 +270,8 @@ class SosBloc extends Bloc<SosEvent, SosState> {
 
   @override
   Future<void> close() {
-    _captureTimer?.cancel();
+    _silenceTimer?.cancel();
+    _failsafeTimer?.cancel();
     try { _speech.stop(); } catch (_) {}
     _channel.setMethodCallHandler(null);
     SosForegroundService.stopService();
