@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../blocs/sos/sos_bloc.dart';
 import '../../blocs/sos/sos_state.dart';
-import '../../blocs/sos/sos_event.dart';
 import '../../blocs/help_request/help_request_bloc.dart';
 import '../../blocs/help_request/help_request_event.dart';
 import '../../blocs/location/location_bloc.dart';
@@ -82,10 +81,6 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
             header = "Mission Accepted";
             liveText = "Sending: ${state.message}";
             isThinking = true;
-          } else if (state is SosNoCapture) {
-            header = "No Message Found";
-            liveText = "I didn't catch that. Please try again.";
-            isListening = false;
           } else if (state is SosError) {
              header = "Error";
              liveText = state.message;
@@ -168,31 +163,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
                         ),
                       ),
                     ),
-                    const SizedBox(height: 32),
-                    if (state is SosNoCapture)
-                      Center(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            context.read<SosBloc>().add(RetrySosCapture());
-                          },
-                          icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
-                          label: const Text(
-                            "TRY AGAIN",
-                            style: TextStyle(
-                              color: Colors.white,
-                              letterSpacing: 2,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.white24),
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                          ),
-                        ),
-                      ),
+
                     const Expanded(flex: 4, child: SizedBox()),
                   ],
                 ),

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import '../../repositories/help_request_repository.dart';
 import 'help_request_event.dart';
 import 'help_request_state.dart';
@@ -10,31 +11,31 @@ class HelpRequestBloc extends Bloc<HelpRequestEvent, HelpRequestState> {
   final HelpRequestRepository _repository;
   StreamSubscription? _requestSubscription;
   StreamSubscription? _helperSubscription;
-  Timer? _matchingTimer;
   HelpRequestModel? _currentActiveRequest;
+  HelpRequestModel? get currentActiveRequest => _currentActiveRequest;
+  String? _currentMatchedId;
+  String? _currentDistance;
+  final DateTime _sessionStartTime = DateTime.now();
 
   HelpRequestBloc({required HelpRequestRepository repository})
     : _repository = repository,
       super(HelpRequestInitial()) {
     on<FindHelper>(_onFindHelper);
-    on<RetryFindHelper>(_onRetryFindHelper);
     on<LoadActiveRequest>(_onLoadActiveRequest);
     on<ListenToVictimRequests>(_onListenToVictimRequests);
     on<CheckRequestStatus>(_onCheckRequestStatus);
     on<ListenForHelperMatches>(_onListenForHelperMatches);
-    on<AcceptRequest>(_onAcceptRequest);
-    on<RejectRequest>(_onRejectRequest);
-    on<ResolveRequest>(_onResolveRequest);
-    on<CancelAcceptedRequest>(_onCancelAcceptedRequest);
-    on<MarkAsSpam>(_onMarkAsSpam);
-    on<RequestUpdated>(_onRequestUpdated);
+    on<UpdateHelpRequestStatus>(_onUpdateStatus);
+    on<RequestUpdated>(_onRequestUpdated, transformer: restartable());
     on<HelperMatchesUpdated>(_onHelperMatchesUpdated);
     on<ClearHelpRequest>(_onClearHelpRequest);
   }
 
-  Future<void> _onMarkAsSpam(MarkAsSpam event, Emitter<HelpRequestState> emit) async {
+  Future<void> _onUpdateStatus(UpdateHelpRequestStatus event, Emitter<HelpRequestState> emit) async {
     try {
-      await _repository.markAsSpam(event.requestId);
+      // PURE DATABASE-DRIVEN ACTION
+      // We only update Supabase. The stream listener (_onRequestUpdated) handles everything else.
+      await _repository.updateStatus(event.requestId, event.status);
     } catch (e) {
       emit(HelpRequestError(e.toString()));
     }
@@ -43,18 +44,9 @@ class HelpRequestBloc extends Bloc<HelpRequestEvent, HelpRequestState> {
   void _onClearHelpRequest(ClearHelpRequest event, Emitter<HelpRequestState> emit) {
     _requestSubscription?.cancel();
     _helperSubscription?.cancel();
-    _matchingTimer?.cancel();
     _requestSubscription = null;
     _helperSubscription = null;
-    _matchingTimer = null;
     emit(HelpRequestInitial());
-  }
-
-  void _startTimer(String matchedId, String victimId) {
-    _matchingTimer?.cancel();
-    _matchingTimer = Timer(const Duration(minutes: 5), () {
-      add(RetryFindHelper(matchedId: matchedId, victimId: victimId));
-    });
   }
 
   Future<void> _onFindHelper(FindHelper event, Emitter<HelpRequestState> emit) async {
@@ -112,17 +104,19 @@ class HelpRequestBloc extends Bloc<HelpRequestEvent, HelpRequestState> {
           final matcherResponse = results[0];
           final voiceResponse = results[1];
 
-          // 1. Emit Voice Assistant conversation first
+          // 1. Process matching results FIRST
+          await _processMatcherResponse(matcherResponse, event.victimId, emit);
+
+          // 2. Emit Voice Assistant conversation
           if (voiceResponse.containsKey('reply')) {
             emit(HelpRequestConversation(
               voiceResponse['reply'], 
               audioPath: voiceResponse['audioPath'],
-              activeRequest: _currentActiveRequest
+              activeRequest: _currentActiveRequest,
+              matchedId: _currentMatchedId,
+              distance: _currentDistance,
             ));
           }
-
-          // 2. Process matching results
-          await _processMatcherResponse(matcherResponse, event.victimId, emit);
         }
       } else {
         // TEXT INPUT FLOW
@@ -143,7 +137,7 @@ class HelpRequestBloc extends Bloc<HelpRequestEvent, HelpRequestState> {
             victimId: event.victimId,
             lat: event.lat,
             lng: event.lng,
-          ).catchError((e) {
+          ).timeout(const Duration(seconds: 60)).catchError((e) {
             developer.log('HelpRequestBloc: Matcher Agent error: $e');
             return <String, dynamic>{'error': e.toString()};
           });
@@ -155,18 +149,23 @@ class HelpRequestBloc extends Bloc<HelpRequestEvent, HelpRequestState> {
             lng: event.lng,
           ).catchError((e) {
             developer.log('HelpRequestBloc: Assist Agent error: $e');
-            return <String, dynamic>{'reply': 'Assistant currently unavailable.'};
+            return <String, dynamic>{'reply': 'Assistant Core Error: $e'};
           });
 
           final results = await Future.wait([matcherFuture, assistFuture]);
           final matcherResponse = results[0];
           final assistResponse = results[1];
 
-          if (assistResponse.containsKey('reply')) {
-            emit(HelpRequestConversation(assistResponse['reply'], activeRequest: _currentActiveRequest));
-          }
-
           await _processMatcherResponse(matcherResponse, event.victimId, emit);
+
+          if (assistResponse.containsKey('reply')) {
+            emit(HelpRequestConversation(
+              assistResponse['reply'], 
+              activeRequest: _currentActiveRequest,
+              matchedId: _currentMatchedId,
+              distance: _currentDistance,
+            ));
+          }
         }
       }
     } catch (e) {
@@ -180,6 +179,7 @@ class HelpRequestBloc extends Bloc<HelpRequestEvent, HelpRequestState> {
     if (matcherResponse.containsKey('error')) return;
 
     if (matcherResponse.containsKey('reply') && !matcherResponse.containsKey('matched_id')) {
+      _currentActiveRequest = null; 
       emit(HelpRequestConversation(matcherResponse['reply'], activeRequest: _currentActiveRequest));
       return;
     }
@@ -192,8 +192,10 @@ class HelpRequestBloc extends Bloc<HelpRequestEvent, HelpRequestState> {
       final request = await _repository.getRequestById(requestId);
       if (request != null) {
         _currentActiveRequest = request;
-        emit(HelpRequestPending(request, matchedId: matchedId, distance: distance));
-        _startTimer(matchedId, victimId);
+        _currentMatchedId = matchedId;
+        _currentDistance = distance;
+        // Centralized: Trigger an update event with the full metadata attached to the model
+        add(RequestUpdated(request.copyWith(matchedId: matchedId, distance: distance)));
         add(ListenToVictimRequests(victimId));
       } else {
         emit(HelpRequestError("Matched but failed to fetch request locally."));
@@ -204,40 +206,13 @@ class HelpRequestBloc extends Bloc<HelpRequestEvent, HelpRequestState> {
     }
   }
 
-  Future<void> _onRetryFindHelper(RetryFindHelper event, Emitter<HelpRequestState> emit) async {
-    _matchingTimer?.cancel();
-    emit(HelpRequestSearching());
-    try {
-      final n8nResponse = await _repository.triggerN8nRetrySearch(
-        matchedId: event.matchedId,
-        victimId: event.victimId,
-      );
-      
-      final String newMatchedId = n8nResponse['matched_id'];
-      final String requestId = n8nResponse['request_id'];
-      final String distance = n8nResponse['distance']?.toString() ?? 'Nearby';
-      
-      final request = await _repository.getRequestById(requestId);
-      if (request != null) {
-        emit(HelpRequestPending(request, matchedId: newMatchedId, distance: distance));
-        _startTimer(newMatchedId, event.victimId);
-        add(ListenToVictimRequests(event.victimId));
-      } else {
-        emit(HelpRequestError("Failed to find next helper in the queue."));
-      }
-    } catch (e) {
-      emit(HelpRequestError(e.toString()));
-    }
-  }
+
 
   Future<void> _onLoadActiveRequest(LoadActiveRequest event, Emitter<HelpRequestState> emit) async {
-    // ALWAYS clear old state/subs before loading for a new user
     _requestSubscription?.cancel();
     _helperSubscription?.cancel();
-    _matchingTimer?.cancel();
     _requestSubscription = null;
     _helperSubscription = null;
-    _matchingTimer = null;
     emit(HelpRequestInitial());
 
     // Start a global victim listener as a safety net (Persistent)
@@ -246,16 +221,17 @@ class HelpRequestBloc extends Bloc<HelpRequestEvent, HelpRequestState> {
     try {
       final request = await _repository.getActiveRequest(event.victimId);
       if (request != null) {
-        _currentActiveRequest = request;
-        if (request.status == 'accepted') {
-          emit(HelpRequestAccepted(request, distance: "In Progress"));
-        } else if (request.status == 'pending') {
-          emit(HelpRequestPending(request, distance: "Awaiting Response"));
-        } else {
-          // If it's something else like 'completed' or 'rejected', revert to initial
+        // 🔒 SAFETY CHECK: If the mission is old, auto-clear it.
+        if (_isRequestExpired(request)) {
+          developer.log('HelpRequestBloc: Active request found but expired (${request.id}). Clearing.');
           _currentActiveRequest = null;
           emit(HelpRequestInitial());
+          return;
         }
+
+        _currentActiveRequest = request;
+        // Centralized: Initial load triggers a RequestUpdated event to standardize state emission
+        add(RequestUpdated(request));
       } else {
         _currentActiveRequest = null;
         emit(HelpRequestInitial());
@@ -291,102 +267,77 @@ class HelpRequestBloc extends Bloc<HelpRequestEvent, HelpRequestState> {
     );
   }
 
-  Future<void> _onAcceptRequest(AcceptRequest event, Emitter<HelpRequestState> emit) async {
-    try {
-      await _repository.updateStatus(event.requestId, 'accepted');
-    } catch (e) {
-      emit(HelpRequestError(e.toString()));
-    }
-  }
 
-  Future<void> _onRejectRequest(RejectRequest event, Emitter<HelpRequestState> emit) async {
-    try {
-      // 1. Update status to rejected
-      await _repository.updateStatus(event.requestId, 'rejected');
-      
-      // 2. Trigger n8n retry if matchedId exists
-      if (event.matchedId != null && event.matchedId!.isNotEmpty) {
-        await _repository.triggerN8nRetrySearch(
-          matchedId: event.matchedId!,
-          victimId: event.victimId,
-        );
-      }
-      // Local UI will refresh via stream subscriptions
-    } catch (e) {
-      emit(HelpRequestError(e.toString()));
-    } 
-  }
-
-  Future<void> _onResolveRequest(ResolveRequest event, Emitter<HelpRequestState> emit) async {
-    try {
-      await _repository.updateStatus(event.requestId, 'completed');
-    } catch (e) {
-      emit(HelpRequestError(e.toString()));
-    }
-  }
-
-  Future<void> _onCancelAcceptedRequest(CancelAcceptedRequest event, Emitter<HelpRequestState> emit) async {
-    try {
-      // 1. Update status to rejected
-      await _repository.updateStatus(event.requestId, 'rejected');
-      
-      // 2. Trigger n8n retry if matchedId exists
-      if (event.matchedId != null && event.matchedId!.isNotEmpty) {
-        await _repository.triggerN8nRetrySearch(
-          matchedId: event.matchedId!,
-          victimId: event.victimId,
-        );
-      }
-      
-      // Local UI will refresh via stream subscriptions
-    } catch (e) {
-      emit(HelpRequestError(e.toString()));
-    }
-  }
 
   void _onRequestUpdated(RequestUpdated event, Emitter<HelpRequestState> emit) {
-    final request = event.request;
-    String? mId;
-    String? dist;
-    if (state is HelpRequestActive) {
-      mId = (state as HelpRequestActive).matchedId;
-      dist = (state as HelpRequestActive).distance;
+    var request = event.request;
+    
+    // 🛡️ CLEAN HANDOVER: Ensure Row 2/3/etc. inherits session-long metadata
+    // from the BLoC's memory if the database row hasn't populated them yet.
+    if (request.matchedId == null && _currentMatchedId != null) {
+      request = request.copyWith(matchedId: _currentMatchedId);
     }
+    if (request.distance == null && _currentDistance != null) {
+      request = request.copyWith(distance: _currentDistance);
+    }
+
+    // 🛡️ PERSISTENT METADATA TRACKING (Update memory based on latest valid data)
+    if (request.matchedId != null) _currentMatchedId = request.matchedId;
+    if (request.distance != null) _currentDistance = request.distance;
+    
+    final String? mId = _currentMatchedId;
+    final String? dist = _currentDistance;
+
+    developer.log('HelpRequestBloc: Processing Stream Update. ID: ${request.id}, Status: ${request.status}');
 
     if (request.status == 'accepted') {
-      _matchingTimer?.cancel();
       _currentActiveRequest = request;
-      emit(HelpRequestAccepted(request, matchedId: mId, distance: dist));
+      emit(HelpRequestActive(request, matchedId: mId, distance: dist));
     } else if (request.status == 'rejected') {
-      _matchingTimer?.cancel();
       _currentActiveRequest = null;
       
-      // 🛡️ STALE REJECTION GUARD: If app just opened (Initial), ignore old rejected rows
-      if (state is HelpRequestInitial) return;
-
-      // Auto-trigger retry if we have a matchedId pointer (Victim flow)
-      if (mId != null) {
-        add(RetryFindHelper(matchedId: mId, victimId: request.victimId));
-      } else {
-        // If no pointer, just show rejection (Helper flow)
-        emit(HelpRequestRejected(request, matchedId: mId, distance: dist));
+      // 🛡️ STALE REJECTION GUARD: Ignore rejections from previous app sessions
+      // or if we are just initializing in an idle state.
+      final bool isHistorical = request.updatedAt != null && request.updatedAt!.isBefore(_sessionStartTime);
+      if (state is HelpRequestInitial || isHistorical) {
+        developer.log('HelpRequestBloc: Ignoring historical or premature rejection (${request.id})');
+        return;
       }
+
+      // 🕒 EXPIRY GUARD: If the rejection is more than 3 minutes old, stop searching.
+      if (_isRequestExpired(request)) {
+        developer.log('HelpRequestBloc: Search loop timed out for mission ${request.id}');
+        emit(HelpRequestInitial());
+        return;
+      }
+
+      // 🛡️ RE-SEARCH: Handled by n8n. Frontend just shows the searching radar.
+      emit(HelpRequestSearching()); 
+    } else if (request.status == 'cancelled') {
+       _currentActiveRequest = null;
+       emit(HelpRequestInitial());
     } else if (request.status == 'completed') {
-      _matchingTimer?.cancel();
       _currentActiveRequest = null;
-      emit(HelpRequestResolved(request, matchedId: mId, distance: dist));
+      emit(HelpRequestActive(request, matchedId: mId, distance: dist));
     } else if (request.status == 'spam' || request.status == 'blocked') {
-      _matchingTimer?.cancel();
       _currentActiveRequest = null;
       emit(HelpRequestError("This communication has been flagged for security review."));
-    } else if (request.status == 'pending') {
+    } else if (request.status == 'pending' || request.status == 'accepted') {
       _currentActiveRequest = request;
-      emit(HelpRequestPending(request, matchedId: mId, distance: dist));
+      emit(HelpRequestActive(request, matchedId: mId, distance: dist));
     } else {
-       // Catch-all for other states (e.g. idle or cancelled)
+       // Catch-all for other states (Initial, etc.)
       _currentActiveRequest = null;
+      _currentMatchedId = null;
+      _currentDistance = null;
       emit(HelpRequestInitial());
     }
+  }
+
+  bool _isRequestExpired(HelpRequestModel request) {
+    if (request.updatedAt == null) return false;
+    final diff = DateTime.now().difference(request.updatedAt!);
+    return diff.inMinutes >= 1;
   }
 
   void _onHelperMatchesUpdated(HelperMatchesUpdated event, Emitter<HelpRequestState> emit) {
@@ -395,7 +346,6 @@ class HelpRequestBloc extends Bloc<HelpRequestEvent, HelpRequestState> {
 
   @override
   Future<void> close() {
-    _matchingTimer?.cancel();
     _requestSubscription?.cancel();
     _helperSubscription?.cancel();
     return super.close();

@@ -25,11 +25,18 @@ class SosLiveTextUpdated extends SosEvent {
 /// Hardware/Sensor shake trigger detected
 class StartSosCapture extends SosEvent {}
 
-/// User wants to try recording again
-class RetrySosCapture extends SosEvent {}
+/// User submits the offline SOS sheet
+class SubmitOfflineSos extends SosEvent {
+  final String message;
+  final String priority;
+  final double? lat;
+  final double? lon;
 
-/// Internal event: Recording ended without recognized speech
-class SosNoMessageDetected extends SosEvent {}
+  const SubmitOfflineSos(this.message, this.priority, {this.lat, this.lon});
+
+  @override
+  List<Object?> get props => [message, priority, lat, lon];
+}
 
 /// 10-second distress recording is complete
 class DistressCaptured extends SosEvent {

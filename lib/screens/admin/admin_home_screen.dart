@@ -13,6 +13,7 @@ import '../../config/supabase_config.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../widgets/helper_grid_map.dart';
+import '../shared/leaderboard_screen.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -81,6 +82,15 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with TickerProviderSt
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.leaderboard_rounded, color: Color(0xFFFFD700)),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.power_settings_new, color: Colors.orangeAccent),
             onPressed: () {

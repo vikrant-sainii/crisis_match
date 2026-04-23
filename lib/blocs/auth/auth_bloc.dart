@@ -1,22 +1,28 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../repositories/auth_repository.dart';
 import '../../repositories/helper_repository.dart';
 import '../../repositories/location_repository.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
+import '../../repositories/low_network_repository.dart';
+import '../../models/profile_model.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthRepository _authRepository;
   final HelperRepository _helperRepository;
   final LocationRepository _locationRepository;
+  final LowNetworkRepository _lowNetworkRepo;
 
   AuthBloc({
     required AuthRepository authRepository,
     required HelperRepository helperRepository,
     required LocationRepository locationRepository,
+    required LowNetworkRepository lowNetworkRepo,
   })  : _authRepository = authRepository,
         _helperRepository = helperRepository,
         _locationRepository = locationRepository,
+        _lowNetworkRepo = lowNetworkRepo,
         super(AuthInitial()) {
     on<AuthCheckStatus>(_onCheckStatus);
     on<AuthSignUpRequested>(_onSignUp);
@@ -29,7 +35,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     final userId = _authRepository.getCurrentUserId();
+    final isOnline = await _lowNetworkRepo.hasInternet();
+
     if (userId != null) {
+      if (!isOnline) {
+        // We have a local session, but offline. Allow entry with cached profile info if possible.
+        // For now, we trust the Supabase local persistence.
+        try {
+          final profile = await _authRepository.getProfile(userId);
+          emit(AuthAuthenticated(profile));
+        } catch (_) {
+          // If we can't even get the local profile, treat as offline guest or authenticated fallback
+          emit(AuthAuthenticated(ProfileModel(id: userId, role: 'victim', fullName: 'Cached User', email: '')));
+        }
+        return;
+      }
+
       try {
         final profile = await _authRepository.getProfile(userId);
         if (profile.isBlocked) {
@@ -41,7 +62,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(AuthUnauthenticated());
       }
     } else {
-      emit(AuthUnauthenticated());
+      if (!isOnline) {
+        final prefs = await SharedPreferences.getInstance();
+        final savedId = prefs.getString('last_user_id');
+        final savedName = prefs.getString('last_user_name') ?? 'Offline User';
+        
+        if (savedId != null) {
+          emit(AuthAuthenticated(ProfileModel(
+            id: savedId, 
+            role: 'victim', 
+            fullName: savedName, 
+            email: ''
+          )));
+        } else {
+          emit(AuthOfflineGuest());
+        }
+      } else {
+        emit(AuthUnauthenticated());
+      }
     }
   }
 
@@ -79,6 +117,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           lng: lng,
         );
       }
+      
+      await _persistProfile(profile);
       emit(AuthAuthenticated(profile));
     } catch (e) {
       emit(AuthError(e.toString()));
@@ -96,6 +136,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         password: event.password,
       );
       
+      await _persistProfile(profile);
       if (profile.isBlocked) {
         emit(AuthBlocked(profile, 'Access Restricted for 15 days due to multiple false requests.'));
       } else {
@@ -111,6 +152,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     await _authRepository.signOut();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
     emit(AuthUnauthenticated());
+  }
+
+  Future<void> _persistProfile(ProfileModel profile) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('last_user_id', profile.id);
+    await prefs.setString('last_user_name', profile.fullName);
   }
 }

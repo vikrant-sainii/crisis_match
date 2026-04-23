@@ -220,8 +220,7 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
     return BlocBuilder<HelpRequestBloc, HelpRequestState>(
       builder: (context, state) {
         bool isResolved = false;
-        if (state is HelpRequestResolved) isResolved = true;
-        if (state is HelpRequestAccepted && state.request.status == 'completed') isResolved = true;
+        if (state is HelpRequestActive && state.request.status == 'completed') isResolved = true;
 
         final color = isResolved ? Colors.greenAccent : neonCyan;
         return Container(
@@ -265,7 +264,7 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('GO BACK', style: TextStyle(color: Colors.blueGrey))),
           ElevatedButton(
             onPressed: () {
-              context.read<HelpRequestBloc>().add(ResolveRequest(widget.request.id));
+              context.read<HelpRequestBloc>().add(UpdateHelpRequestStatus(requestId: widget.request.id, status: 'completed'));
               Navigator.pop(dialogContext);
             },
             style: ElevatedButton.styleFrom(backgroundColor: neonCyan, foregroundColor: darkBg, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
@@ -280,8 +279,7 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
     return BlocBuilder<HelpRequestBloc, HelpRequestState>(
       builder: (context, helpState) {
         bool isResolved = false;
-        if (helpState is HelpRequestResolved) isResolved = true;
-        if (helpState is HelpRequestAccepted && helpState.request.status == 'completed') isResolved = true;
+        if (helpState is HelpRequestActive && helpState.request.status == 'completed') isResolved = true;
 
         if (isResolved) {
           return Container(

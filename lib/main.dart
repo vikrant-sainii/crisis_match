@@ -12,12 +12,17 @@ import 'repositories/chat_repository.dart';
 import 'repositories/help_request_repository.dart';
 import 'repositories/helper_repository.dart';
 import 'repositories/location_repository.dart';
+import 'repositories/low_network_repository.dart';
 import 'blocs/auth/auth_bloc.dart';
 import 'blocs/auth/auth_event.dart';
 import 'blocs/chat/chat_bloc.dart';
 import 'blocs/help_request/help_request_bloc.dart';
 import 'blocs/location/location_bloc.dart';
 import 'blocs/admin/admin_bloc.dart';
+import 'repositories/leaderboard_repository.dart';
+import 'blocs/leaderboard/leaderboard_bloc.dart';
+import 'blocs/connectivity/connectivity_bloc.dart';
+import 'blocs/connectivity/connectivity_event.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -78,6 +83,8 @@ void main() async {
   final helpRequestRepository = HelpRequestRepository();
   final chatRepository = ChatRepository();
   final locationRepository = LocationRepository();
+  final lowNetworkRepository = LowNetworkRepository();
+  final leaderboardRepository = LeaderboardRepository(Supabase.instance.client);
 
   runApp(
     MultiRepositoryProvider(
@@ -87,14 +94,22 @@ void main() async {
         RepositoryProvider.value(value: helpRequestRepository),
         RepositoryProvider.value(value: chatRepository),
         RepositoryProvider.value(value: locationRepository),
+        RepositoryProvider.value(value: lowNetworkRepository),
+        RepositoryProvider.value(value: leaderboardRepository),
       ],
       child: MultiBlocProvider(
         providers: [
+          BlocProvider(
+            create: (_) => ConnectivityBloc(
+              repository: lowNetworkRepository,
+            )..add(ObserveConnectivity()),
+          ),
           BlocProvider(
             create: (_) => AuthBloc(
               authRepository: authRepository,
               helperRepository: helperRepository,
               locationRepository: locationRepository,
+              lowNetworkRepo: lowNetworkRepository,
             )..add(AuthCheckStatus()),
           ),
           BlocProvider(
@@ -117,6 +132,11 @@ void main() async {
               authRepository: authRepository,
               helperRepository: helperRepository,
               helpRequestRepository: helpRequestRepository,
+            ),
+          ),
+          BlocProvider(
+            create: (_) => LeaderboardBloc(
+              repository: leaderboardRepository,
             ),
           ),
         ],

@@ -41,8 +41,24 @@ class SosCaptured extends SosState {
   List<Object?> get props => [message];
 }
 
-/// Recording ended but no speech was recognized
-class SosNoCapture extends SosState {}
+/// No internet detected -> Show SMS input sheet
+class SosOfflineInputPending extends SosState {
+  final double lat;
+  final double lon;
+  const SosOfflineInputPending({required this.lat, required this.lon});
+
+  @override
+  List<Object?> get props => [lat, lon];
+}
+
+/// Offline SMS successfully sent
+class SosOfflineSuccess extends SosState {
+  final String phoneNumber;
+  const SosOfflineSuccess(this.phoneNumber);
+
+  @override
+  List<Object?> get props => [phoneNumber];
+}
 
 /// Something went wrong
 class SosError extends SosState {

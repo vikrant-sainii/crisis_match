@@ -14,6 +14,8 @@ import '../../blocs/location/location_event.dart';
 import '../../blocs/location/location_state.dart';
 import '../../models/help_request_model.dart';
 import '../../repositories/helper_repository.dart';
+import '../../repositories/leaderboard_repository.dart';
+import '../../screens/shared/leaderboard_screen.dart';
 import '../../widgets/status_badge.dart';
 import 'helper_chat_screen.dart';
 import 'helper_map_screen.dart';
@@ -25,7 +27,8 @@ class HelperHomeScreen extends StatefulWidget {
   State<HelperHomeScreen> createState() => _HelperHomeScreenState();
 }
 
-class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProviderStateMixin {
+class _HelperHomeScreenState extends State<HelperHomeScreen>
+    with TickerProviderStateMixin {
   bool _isAvailable = true;
   String? _helperId;
   late TabController _tabController;
@@ -58,22 +61,15 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
         _isAvailable = helper.isAvailable;
       });
 
-      context.read<HelpRequestBloc>().add(
-        ListenForHelperMatches(helper.id),
-      );
-
-      // Check for active missions to sync chat immediately
-      final helpState = context.read<HelpRequestBloc>().state;
-      if (helpState is HelperRequestsLoaded) {
-        try {
-          final activeMission = helpState.requests.firstWhere((r) => r.status == 'accepted');
-          context.read<ChatBloc>().add(LoadMessages(activeMission.id));
-        } catch (_) {}
-      }
+      context.read<HelpRequestBloc>().add(ListenForHelperMatches(helper.id));
 
       final locationState = context.read<LocationBloc>().state;
       if (locationState is LocationLoaded) {
-        await helperRepo.updateLocation(helper.id, locationState.lat, locationState.lng);
+        await helperRepo.updateLocation(
+          helper.id,
+          locationState.lat,
+          locationState.lng,
+        );
       }
     }
   }
@@ -81,9 +77,12 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
   Future<void> _toggleAvailability(bool value) async {
     if (_helperId == null) return;
     setState(() => _isAvailable = value);
-    await context.read<HelperRepository>().updateAvailability(_helperId!, value);
+    await context.read<HelperRepository>().updateAvailability(
+      _helperId!,
+      value,
+    );
   }
-  
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -127,12 +126,16 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
                       if (state is HelperRequestsLoaded) {
                         // Optional: Detect subtle changes here if needed
                       }
-                      
+
                       // Handle transitions based on status changes of loaded requests
                       if (state is HelperRequestsLoaded) {
-                        final accepted = state.requests.any((r) => r.status == 'accepted');
-                        final pending = state.requests.any((r) => r.status == 'pending');
-                        
+                        final accepted = state.requests.any(
+                          (r) => r.status == 'accepted',
+                        );
+                        final pending = state.requests.any(
+                          (r) => r.status == 'pending',
+                        );
+
                         // If we are on the UPLINKS tab (0) and there are no pendings but there are accepteds, move to missions
                         if (_tabController.index == 0 && !pending && accepted) {
                           _tabController.animateTo(1);
@@ -146,10 +149,30 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
                           return TabBarView(
                             controller: _tabController,
                             children: [
-                              _buildRequestList(reqs.where((r) => r.status == 'pending').toList(), 'NO PENDING UPLINKS'),
-                              _buildRequestList(reqs.where((r) => r.status == 'accepted').toList(), 'NO ACTIVE MISSIONS'),
-                              _buildRequestList(reqs.where((r) => r.status == 'completed').toList(), 'ARCHIVES EMPTY'),
-                              _buildRequestList(reqs.where((r) => r.status == 'rejected').toList(), 'REJECTIONS LOGS CLEAR'),
+                              _buildRequestList(
+                                reqs
+                                    .where((r) => r.status == 'pending')
+                                    .toList(),
+                                'NO PENDING UPLINKS',
+                              ),
+                              _buildRequestList(
+                                reqs
+                                    .where((r) => r.status == 'accepted')
+                                    .toList(),
+                                'NO ACTIVE MISSIONS',
+                              ),
+                              _buildRequestList(
+                                reqs
+                                    .where((r) => r.status == 'completed')
+                                    .toList(),
+                                'ARCHIVES EMPTY',
+                              ),
+                              _buildRequestList(
+                                reqs
+                                    .where((r) => r.status == 'rejected')
+                                    .toList(),
+                                'REJECTIONS LOGS CLEAR',
+                              ),
                             ],
                           );
                         }
@@ -158,19 +181,39 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
                             child: Container(
                               margin: const EdgeInsets.all(24),
                               padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.red.withOpacity(0.3))),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.red.withOpacity(0.3),
+                                ),
+                              ),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 48),
+                                  const Icon(
+                                    Icons.warning_amber_rounded,
+                                    color: Colors.orange,
+                                    size: 48,
+                                  ),
                                   const SizedBox(height: 12),
-                                  Text('SYSTEM OVERLOAD: ${state.message}', style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                                  Text(
+                                    'SYSTEM OVERLOAD: ${state.message}',
+                                    style: const TextStyle(
+                                      color: Colors.redAccent,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
                                 ],
                               ),
                             ),
                           );
                         }
-                        return const Center(child: CircularProgressIndicator(color: neonCyan));
+                        return const Center(
+                          child: CircularProgressIndicator(color: neonCyan),
+                        );
                       },
                     ),
                   ),
@@ -194,24 +237,67 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
             children: [
               Text(
                 'RESPONDER-CMD',
-                style: TextStyle(color: neonCyan, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 2),
+                style: TextStyle(
+                  color: neonCyan,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2,
+                ),
               ),
               Text(
                 'FIELD AGENT DASHBOARD',
-                style: TextStyle(color: Colors.blueGrey, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                style: TextStyle(
+                  color: Colors.blueGrey,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                ),
               ),
             ],
           ),
-          Container(
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), shape: BoxShape.circle, border: Border.all(color: glassBorder)),
-            child: IconButton(
-              icon: const Icon(Icons.power_settings_new_rounded, color: Colors.orangeAccent),
-              onPressed: () {
-                context.read<HelpRequestBloc>().add(ClearHelpRequest());
-                context.read<ChatBloc>().add(ClearChat());
-                context.read<AuthBloc>().add(AuthSignOutRequested());
-              },
-            ),
+          Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: glassBorder),
+                ),
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.leaderboard_rounded,
+                    color: Color(0xFFFFD700),
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const LeaderboardScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: glassBorder),
+                ),
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.power_settings_new_rounded,
+                    color: Colors.orangeAccent,
+                  ),
+                  onPressed: () {
+                    context.read<HelpRequestBloc>().add(ClearHelpRequest());
+                    context.read<ChatBloc>().add(ClearChat());
+                    context.read<AuthBloc>().add(AuthSignOutRequested());
+                  },
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -230,9 +316,25 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
       ),
       child: Row(
         children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle, boxShadow: [BoxShadow(color: statusColor, blurRadius: 6)])),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: statusColor,
+              shape: BoxShape.circle,
+              boxShadow: [BoxShadow(color: statusColor, blurRadius: 6)],
+            ),
+          ),
           const SizedBox(width: 12),
-          Text(_isAvailable ? 'TRANSMISSION READY' : 'SYSTEM OFFLINE', style: TextStyle(color: statusColor, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 2)),
+          Text(
+            _isAvailable ? 'TRANSMISSION READY' : 'SYSTEM OFFLINE',
+            style: TextStyle(
+              color: statusColor,
+              fontWeight: FontWeight.w900,
+              fontSize: 10,
+              letterSpacing: 2,
+            ),
+          ),
           const Spacer(),
           Transform.scale(
             scale: 0.8,
@@ -254,16 +356,28 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: slatePanel.withOpacity(0.5), borderRadius: BorderRadius.circular(16), border: Border.all(color: glassBorder)),
+      decoration: BoxDecoration(
+        color: slatePanel.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: glassBorder),
+      ),
       child: TabBar(
         controller: _tabController,
         onTap: (_) => setState(() {}),
-        indicator: BoxDecoration(color: neonCyan.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: neonCyan.withOpacity(0.5), width: 1.5)),
+        indicator: BoxDecoration(
+          color: neonCyan.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: neonCyan.withOpacity(0.5), width: 1.5),
+        ),
         labelColor: neonCyan,
         unselectedLabelColor: Colors.blueGrey.shade400,
         indicatorSize: TabBarIndicatorSize.tab,
         dividerColor: Colors.transparent,
-        labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1),
+        labelStyle: const TextStyle(
+          fontWeight: FontWeight.w900,
+          fontSize: 10,
+          letterSpacing: 1,
+        ),
         tabs: const [
           Tab(text: 'UPLINKS'),
           Tab(text: 'MISSIONS'),
@@ -278,7 +392,9 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
     return RefreshIndicator(
       onRefresh: () async {
         if (_helperId != null) {
-          context.read<HelpRequestBloc>().add(ListenForHelperMatches(_helperId!));
+          context.read<HelpRequestBloc>().add(
+            ListenForHelperMatches(_helperId!),
+          );
         }
         await Future.delayed(const Duration(milliseconds: 500));
       },
@@ -314,8 +430,14 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
     final isCompleted = request.status == 'completed';
     final isRejected = request.status == 'rejected';
 
-    Color cardColor = isPending ? neonCyan : isAccepted ? Colors.greenAccent : isRejected ? neonOrange : Colors.blueGrey;
-    
+    Color cardColor = isPending
+        ? neonCyan
+        : isAccepted
+        ? Colors.greenAccent
+        : isRejected
+        ? neonOrange
+        : Colors.blueGrey;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -323,7 +445,11 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: cardColor.withOpacity(0.3), width: 1),
         boxShadow: [
-          BoxShadow(color: cardColor.withOpacity(0.05), blurRadius: 15, spreadRadius: -5),
+          BoxShadow(
+            color: cardColor.withOpacity(0.05),
+            blurRadius: 15,
+            spreadRadius: -5,
+          ),
         ],
       ),
       child: Column(
@@ -331,16 +457,29 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
           // Header
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(color: cardColor.withOpacity(0.05), borderRadius: const BorderRadius.vertical(top: Radius.circular(20))),
+            decoration: BoxDecoration(
+              color: cardColor.withOpacity(0.05),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(request.crisisType.toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5)),
+                Text(
+                  request.crisisType.toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                    letterSpacing: 1.5,
+                  ),
+                ),
                 StatusBadge(status: request.status),
               ],
             ),
           ),
-          
+
           Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -350,16 +489,39 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
                   children: [
                     Container(
                       padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: darkBg, shape: BoxShape.circle, border: Border.all(color: glassBorder)),
-                      child: Icon(Icons.person_pin_rounded, color: cardColor, size: 24),
+                      decoration: BoxDecoration(
+                        color: darkBg,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: glassBorder),
+                      ),
+                      child: Icon(
+                        Icons.person_pin_rounded,
+                        color: cardColor,
+                        size: 24,
+                      ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(request.victimName ?? "ANONYMOUS CLIENT", style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                          Text('COORDINATES: ${request.victimCurrLat.toStringAsFixed(4)}, ${request.victimCurrLong.toStringAsFixed(4)}', style: TextStyle(color: Colors.blueGrey.shade400, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+                          Text(
+                            request.victimName ?? "ANONYMOUS CLIENT",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'COORDINATES: ${request.victimCurrLat.toStringAsFixed(4)}, ${request.victimCurrLong.toStringAsFixed(4)}',
+                            style: TextStyle(
+                              color: Colors.blueGrey.shade400,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -371,14 +533,35 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
                   InkWell(
                     onTap: () => _launchTx(request.txHash!),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(color: Colors.greenAccent.withOpacity(0.1), border: Border.all(color: Colors.greenAccent.withOpacity(0.5)), borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.greenAccent.withOpacity(0.1),
+                        border: Border.all(
+                          color: Colors.greenAccent.withOpacity(0.5),
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.verified_rounded, size: 14, color: Colors.greenAccent),
+                          Icon(
+                            Icons.verified_rounded,
+                            size: 14,
+                            color: Colors.greenAccent,
+                          ),
                           SizedBox(width: 8),
-                          Text('POLYGON PROOF ATTESTED', style: TextStyle(fontSize: 10, color: Colors.greenAccent, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                          Text(
+                            'POLYGON PROOF ATTESTED',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.greenAccent,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -390,17 +573,70 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => context.read<HelpRequestBloc>().add(RejectRequest(requestId: request.id, victimId: request.victimId, matchedId: request.matchedId)),
-                          style: OutlinedButton.styleFrom(foregroundColor: neonOrange, side: const BorderSide(color: neonOrange), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                          child: const Text('DECLINE', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2)),
+                          onPressed: () => context.read<HelpRequestBloc>().add(
+                            UpdateHelpRequestStatus(
+                              requestId: request.id,
+                              status: 'rejected',
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: neonOrange,
+                            side: const BorderSide(color: neonOrange),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'DECLINE',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 2,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: () => context.read<HelpRequestBloc>().add(AcceptRequest(request.id)),
-                          style: ElevatedButton.styleFrom(backgroundColor: neonCyan, foregroundColor: darkBg, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 4, shadowColor: neonCyan.withOpacity(0.5)),
-                          child: const Text('ACCEPT', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2)),
+                          onPressed: () async {
+                            // 1. Update request status in DB (existing mission logic)
+                            context.read<HelpRequestBloc>().add(
+                              UpdateHelpRequestStatus(
+                                requestId: request.id,
+                                status: 'accepted',
+                              ),
+                            );
+                            // 2. Create help_session for scoring (isolated leaderboard logic)
+                            if (_helperId != null) {
+                              await context
+                                  .read<LeaderboardRepository>()
+                                  .createSession(
+                                    requestId: request.id,
+                                    helperId: _helperId!,
+                                    victimId: request.victimId,
+                                    requestCreatedAt:
+                                        request.createdAt ?? DateTime.now(),
+                                  );
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: neonCyan,
+                            foregroundColor: darkBg,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 4,
+                            shadowColor: neonCyan.withOpacity(0.5),
+                          ),
+                          child: const Text(
+                            'ACCEPT',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 2,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -412,28 +648,49 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
                     runSpacing: 12,
                     children: [
                       _buildCyberActionButton(
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HelperChatScreen(request: request))),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => HelperChatScreen(request: request),
+                          ),
+                        ),
                         icon: Icons.forum_rounded,
                         label: 'COMMS',
                         color: neonCyan,
                       ),
-                       _buildCyberActionButton(
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HelperMapScreen(request: request))),
+                      _buildCyberActionButton(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => HelperMapScreen(request: request),
+                          ),
+                        ),
                         icon: Icons.radar_rounded,
                         label: 'TRACK',
                         color: neonCyan,
                         outlined: true,
                       ),
                       if (isAccepted) ...[
-                         _buildCyberActionButton(
-                          onPressed: () => _showCancelConfirmation(context, request),
+                        _buildCyberActionButton(
+                          onPressed: () =>
+                              _showCancelConfirmation(context, request),
                           icon: Icons.cancel_rounded,
                           label: 'ABORT',
                           color: neonOrange,
                           outlined: true,
                         ),
                         _buildCyberActionButton(
-                          onPressed: () => context.read<HelpRequestBloc>().add(ResolveRequest(request.id)),
+                          onPressed: () async {
+                            context.read<HelpRequestBloc>().add(
+                              UpdateHelpRequestStatus(
+                                requestId: request.id,
+                                status: 'completed',
+                              ),
+                            );
+                            await context
+                                .read<LeaderboardRepository>()
+                                .completeSession(request.id);
+                          },
                           icon: Icons.check_circle_rounded,
                           label: 'SOLVED',
                           color: Colors.greenAccent,
@@ -444,18 +701,52 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
                               context: context,
                               builder: (ctx) => AlertDialog(
                                 backgroundColor: darkBg,
-                                title: const Text('Report Fake Request?', style: TextStyle(color: neonOrange, fontWeight: FontWeight.bold)),
-                                content: const Text('If the victim is not present or this is a fraudulent request, report it as spam. Admin will review and block the user.', style: TextStyle(color: Colors.white70)),
+                                title: const Text(
+                                  'Report Fake Request?',
+                                  style: TextStyle(
+                                    color: neonOrange,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                content: const Text(
+                                  'If the victim is not present or this is a fraudulent request, report it as spam. Admin will review and block the user.',
+                                  style: TextStyle(color: Colors.white70),
+                                ),
                                 actions: [
-                                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('Cancel'),
+                                  ),
                                   ElevatedButton(
                                     onPressed: () {
-                                      context.read<HelpRequestBloc>().add(MarkAsSpam(request.id));
+                                      context.read<HelpRequestBloc>().add(
+                                        UpdateHelpRequestStatus(
+                                          requestId: request.id,
+                                          status: 'spam',
+                                        ),
+                                      );
                                       Navigator.pop(ctx);
-                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reported as SPAM. Admin notified.'), backgroundColor: neonOrange));
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Reported as SPAM. Admin notified.',
+                                          ),
+                                          backgroundColor: neonOrange,
+                                        ),
+                                      );
                                     },
-                                    style: ElevatedButton.styleFrom(backgroundColor: neonOrange),
-                                    child: const Text('REPORT SPAM', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: neonOrange,
+                                    ),
+                                    child: const Text(
+                                      'REPORT SPAM',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -477,20 +768,54 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
     );
   }
 
-  Widget _buildCyberActionButton({required VoidCallback onPressed, required IconData icon, required String label, required Color color, bool outlined = false}) {
+  Widget _buildCyberActionButton({
+    required VoidCallback onPressed,
+    required IconData icon,
+    required String label,
+    required Color color,
+    bool outlined = false,
+  }) {
     if (outlined) {
       return OutlinedButton.icon(
         onPressed: onPressed,
         icon: Icon(icon, size: 16),
-        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 11)),
-        style: OutlinedButton.styleFrom(foregroundColor: color, side: BorderSide(color: color), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        label: Text(
+          label,
+          style: const TextStyle(
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.5,
+            fontSize: 11,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: color,
+          side: BorderSide(color: color),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
       );
     }
     return ElevatedButton.icon(
       onPressed: onPressed,
       icon: Icon(icon, size: 16),
-      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 11)),
-      style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: darkBg, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 2, shadowColor: color.withOpacity(0.3)),
+      label: Text(
+        label,
+        style: const TextStyle(
+          fontWeight: FontWeight.w900,
+          letterSpacing: 1.5,
+          fontSize: 11,
+        ),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: darkBg,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 2,
+        shadowColor: color.withOpacity(0.3),
+      ),
     );
   }
 
@@ -499,7 +824,7 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
     // If it's ~66 characters, it's a transaction hash (0x + 64 hex).
     final String pathType = hash.length <= 42 ? 'address' : 'tx';
     final url = Uri.parse('https://amoy.polygonscan.com/$pathType/$hash');
-    
+
     try {
       if (await canLaunchUrl(url)) {
         await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -521,18 +846,25 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> with TickerProvider
           'The victim will be immediately re-matched with another rescuer.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Go Back')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Go Back'),
+          ),
           ElevatedButton(
             onPressed: () {
-              context.read<HelpRequestBloc>().add(CancelAcceptedRequest(
-                requestId: request.id,
-                victimId: request.victimId,
-                matchedId: request.matchedId,
-              ));
+              context.read<HelpRequestBloc>().add(
+                UpdateHelpRequestStatus(
+                  requestId: request.id,
+                  status: 'rejected',
+                ),
+              );
               Navigator.pop(ctx);
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Confirm Cancellation', style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Confirm Cancellation',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),

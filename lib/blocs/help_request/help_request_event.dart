@@ -28,21 +28,6 @@ class FindHelper extends HelpRequestEvent {
   List<Object?> get props => [message, victimId, lat, lng, isVoice];
 }
 
-/// Victim triggers retry based on rejected state or timeout (passed matched_id array pointer)
-class RetryFindHelper extends HelpRequestEvent {
-  final String matchedId;
-  final String victimId;
-  final bool isVoice;
-
-  const RetryFindHelper({
-    required this.matchedId,
-    required this.victimId,
-    this.isVoice = false,
-  });
-
-  @override
-  List<Object?> get props => [matchedId, victimId, isVoice];
-}
 /// Check if Victim already has an active request on app load(fresh request)
 class LoadActiveRequest extends HelpRequestEvent {
   final String victimId;
@@ -83,65 +68,30 @@ class ListenForHelperMatches extends HelpRequestEvent {
   List<Object?> get props => [helperId];
 }
 
-/// Helper accepts
-class AcceptRequest extends HelpRequestEvent {
+/// Unified status update event for Accept, Reject, Resolve, Cancel, and Spam
+class UpdateHelpRequestStatus extends HelpRequestEvent {
   final String requestId;
+  final String status;
 
-  const AcceptRequest(this.requestId);
-
-  @override
-  List<Object?> get props => [requestId];
-}
-
-/// Helper rejects
-class RejectRequest extends HelpRequestEvent {
-  final String requestId;
-  final String victimId;
-  final String? matchedId;
-
-    const RejectRequest({
+  const UpdateHelpRequestStatus({
     required this.requestId,
-    required this.victimId,
-    this.matchedId,
+    required this.status,
   });
 
   @override
-  List<Object?> get props => [requestId];
-}
-
-/// Helper marks request successfully resolved (triggers blockchain)
-class ResolveRequest extends HelpRequestEvent {
-  final String requestId;
-
-  const ResolveRequest(this.requestId);
-
-  @override
-  List<Object?> get props => [requestId];
-}
-
-class CancelAcceptedRequest extends HelpRequestEvent {
-  final String requestId;
-  final String victimId;
-  final String? matchedId;
-
-  const CancelAcceptedRequest({
-    required this.requestId,
-    required this.victimId,
-    this.matchedId,
-  });
-
-  @override
-  List<Object?> get props => [requestId, victimId, matchedId];
+  List<Object?> get props => [requestId, status];
 }
 
 /// Fired privately by realtime subscriptions
 class RequestUpdated extends HelpRequestEvent {
   final HelpRequestModel request;
+  final String? matchedId; // Optional metadata for n8n pointers
+  final String? distance;  // Optional metadata
 
-  const RequestUpdated(this.request);
+  const RequestUpdated(this.request, {this.matchedId, this.distance});
 
   @override
-  List<Object?> get props => [request];
+  List<Object?> get props => [request, matchedId, distance];
 }
 
 class HelperMatchesUpdated extends HelpRequestEvent {
@@ -165,11 +115,3 @@ class StartHelperTracking extends HelpRequestEvent {
 class StopHelperTracking extends HelpRequestEvent {}
 
 class ClearHelpRequest extends HelpRequestEvent {}
-
-class MarkAsSpam extends HelpRequestEvent {
-  final String requestId;
-  const MarkAsSpam(this.requestId);
-
-  @override
-  List<Object?> get props => [requestId];
-}

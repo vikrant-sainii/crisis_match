@@ -71,10 +71,16 @@ class NotificationService {
 
   /// Helper to get current token and save it
   Future<void> _saveTokenToDatabase() async {
-    String? token = await _fcm.getToken();
-    if (token != null) {
-      developer.log('FCM Token: $token');
-      await _updateTokenInSupabase(token);
+    try {
+      String? token = await _fcm.getToken();
+      if (token != null) {
+        developer.log('FCM Token: $token');
+        await _updateTokenInSupabase(token);
+      }
+    } catch (e) {
+      developer.log('FCM Token error: $e');
+      // On iOS simulators, this is expected as they don't support push notifications.
+      // On real devices, it might mean APNS is still initializing.
     }
   }
 

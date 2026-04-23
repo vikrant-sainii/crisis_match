@@ -23,6 +23,8 @@ class AuthAuthenticated extends AuthState {
 
 class AuthUnauthenticated extends AuthState {}
 
+class AuthOfflineGuest extends AuthState {}
+
 class AuthBlocked extends AuthState {
   final ProfileModel profile;
   final String message;
@@ -34,7 +36,6 @@ class AuthBlocked extends AuthState {
 }
 
 class AuthError extends AuthState {
-// ... existing code ...
   final String message;
 
   const AuthError(this.message);

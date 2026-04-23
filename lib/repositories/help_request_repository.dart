@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:math' show cos, sqrt, asin;
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -24,7 +25,6 @@ class HelpRequestRepository {
 
     if (data == null) return null;
     
-    // Fetch full_name via helpers.profile_id -> profiles.full_name
     if (data['helpers'] != null && data['helpers']['profile_id'] != null) {
       final profileId = data['helpers']['profile_id'] as String;
       final profile = await _client.from('profiles').select('full_name, phone').eq('id', profileId).maybeSingle();
@@ -32,6 +32,23 @@ class HelpRequestRepository {
         data['helper_name'] = profile['full_name'];
         data['helper_phone'] = profile['phone'];
       }
+    }
+
+    // Calculate distance locally since we rely on the DB stream, not the HTTP response
+    if (data['victim_curr_lat'] != null && data['victim_curr_long'] != null &&
+        data['helpers'] != null && data['helpers']['lat'] != null && data['helpers']['lng'] != null) {
+      double lat1 = (data['victim_curr_lat'] as num).toDouble();
+      double lon1 = (data['victim_curr_long'] as num).toDouble();
+      double lat2 = (data['helpers']['lat'] as num).toDouble();
+      double lon2 = (data['helpers']['lng'] as num).toDouble();
+
+      var p = 0.017453292519943295;
+      var c = cos;
+      var a = 0.5 - c((lat2 - lat1) * p) / 2 +
+          c(lat1 * p) * c(lat2 * p) *
+              (1 - c((lon2 - lon1) * p)) / 2;
+      double distanceKm = 12742 * asin(sqrt(a)); // 2 * R; R = 6371 km
+      data['distance'] = '${distanceKm.toStringAsFixed(1)} KM AWAY';
     }
 
     return HelpRequestModel.fromJson(data);
@@ -46,7 +63,7 @@ class HelpRequestRepository {
           helpers ( lat, lng, occupation )
         ''')
         .eq('victim_id', victimId)
-        .inFilter('status', ['pending', 'accepted'])
+        .inFilter('status', ['pending', 'accepted', 'rejected'])
         .order('created_at', ascending: false)
         .limit(1)
         .maybeSingle();
@@ -158,11 +175,27 @@ class HelpRequestRepository {
         .eq('victim_id', victimId)
         .listen((data) async {
           if (data.isNotEmpty) {
-            // Sort by created descending
-            data.sort((a, b) => (DateTime.tryParse(b['created_at']) ?? DateTime(0))
-                .compareTo(DateTime.tryParse(a['created_at']) ?? DateTime(0)));
-                
-            final newestReqId = data.first['request_id'];
+            // Priority 1: Find any 'pending' or 'accepted' requests
+            final activeRequests = data.where((r) => 
+              r['status'] == 'pending' || r['status'] == 'accepted'
+            ).toList();
+
+            Map<String, dynamic> newest;
+            if (activeRequests.isNotEmpty) {
+              // If active missions exist, pick the newest one among them
+              activeRequests.sort((a, b) => (DateTime.tryParse(b['created_at']) ?? DateTime(0))
+                  .compareTo(DateTime.tryParse(a['created_at']) ?? DateTime(0)));
+              newest = activeRequests.first;
+            } else {
+              // Otherwise pick the newest rejection/completion
+              data.sort((a, b) => (DateTime.tryParse(b['created_at']) ?? DateTime(0))
+                  .compareTo(DateTime.tryParse(a['created_at']) ?? DateTime(0)));
+              newest = data.first;
+            }
+
+            final newestReqId = newest['request_id'];
+            developer.log('HelpRequestRepo: Stream update. Newest ID: $newestReqId, Status: ${newest['status']}');
+            
             final fullReq = await _fetchJoinedRequest(newestReqId);
             if (fullReq != null) {
               onUpdate(fullReq);
@@ -208,7 +241,7 @@ class HelpRequestRepository {
         'lat': lat,
         'lng': lng,
       }),
-    ).timeout(const Duration(seconds: 30));
+    ).timeout(const Duration(seconds: 60));
 
     developer.log('HelpReqRepo: n8n Matcher response status: ${response.statusCode}');
     developer.log('HelpReqRepo: n8n Matcher response body: ${response.body}');
@@ -314,7 +347,7 @@ class HelpRequestRepository {
         'lat': lat,
         'lng': lng,
       }),
-    ).timeout(const Duration(seconds: 30));
+    ).timeout(const Duration(seconds: 60));
 
     developer.log('HelpReqRepo: n8n Assist response status: ${response.statusCode}');
     developer.log('HelpReqRepo: n8n Assist response body: ${response.body}');
@@ -351,32 +384,11 @@ class HelpRequestRepository {
         return {'reply': response.body};
       }
     } else {
-      throw Exception('Assistant unavailable (${response.statusCode})');
+      throw Exception('Assist workflow failed (${response.statusCode})');
     }
   }
 
-  /// Trigger n8n webhook to retry/fallback to the next helper
-  Future<Map<String, dynamic>> triggerN8nRetrySearch({
-    required String matchedId,
-    required String victimId,
-  }) async {
-    final url = SupabaseConfig.n8nWebhookUrl;
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'matched_id': matchedId,
-        'victim_id': victimId,
-        'action': 'retry'
-      }),
-    ).timeout(const Duration(seconds: 30));
 
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
-    } else {
-      throw Exception('Failed to find fallback helper: ${response.statusCode}');
-    }
-  }
 
   /// Calls the n8n Voice Assistant webhook.
   ///
@@ -405,7 +417,7 @@ class HelpRequestRepository {
         'lat': lat,
         'lng': lng,
       }),
-    ).timeout(const Duration(seconds: 45));
+    ).timeout(const Duration(seconds: 60));
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       try {
@@ -472,7 +484,7 @@ class HelpRequestRepository {
         Uri.parse(SupabaseConfig.n8nTtsUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'message': text}),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 60));
 
       developer.log('HelpReqRepo: TTS status=${response.statusCode} body=${response.body.substring(0, response.body.length.clamp(0, 200))}');
 

@@ -25,8 +25,14 @@ import 'victim_map_screen.dart';
 import 'voice_assistant_screen.dart';
 import '../../repositories/help_request_repository.dart';
 import '../../models/help_request_model.dart';
+import '../../repositories/leaderboard_repository.dart';
+import '../shared/leaderboard_screen.dart';
 import '../../blocs/admin/admin_bloc.dart';
 import '../../blocs/admin/admin_event.dart';
+import '../../blocs/connectivity/connectivity_bloc.dart';
+import '../../blocs/connectivity/connectivity_state.dart';
+import '../../repositories/low_network_repository.dart';
+import '../../widgets/low_network_sos_sheet.dart';
 import '../../widgets/helper_grid_map.dart';
 
 class VictimHomeScreen extends StatefulWidget {
@@ -44,14 +50,12 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
   late TabController _tabController;
   late AnimationController _pulseController;
 
-  Timer? _timeoutTimer; // 5-minute timeout timer
-  bool _canRetry = false; // Toggled by timer or rejection
-
   // Location streaming for real-time tracking
   StreamSubscription<Position>? _positionStream;
 
   bool _isListening = false;
   bool _wasVoiced = false; // Flag to track if the current message started as voice
+  bool _hasShownRatingDialog = false; // Flag to track if rating dialog was shown
 
   // Audio Player for AI responses
   late AudioPlayer _audioPlayer;
@@ -65,6 +69,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
   static const Color neonCyan = Color(0xFF22D3EE); // Electric Cyan
   static const Color neonOrange = Color(0xFFFB923C); // Hazard Orange
   static const Color glassBorder = Color(0x3394A3B8); // Semi-transparent border
+  static const Color gold = Color(0xFFFFD700); // Semi-transparent border
 
   // Locally store initial AI messages for visual feedback
   final List<Map<String, String>> _localAiMessages = [];
@@ -73,6 +78,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(_onTabChanged);
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -84,29 +90,33 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
     _audioPlayer = AudioPlayer();
 
     final authState = context.read<AuthBloc>().state;
-    if (authState is AuthAuthenticated) {
-      context.read<HelpRequestBloc>().add(
-        LoadActiveRequest(authState.profile.id),
-      );
-      context.read<AdminBloc>().add(LoadAdminData());
+    String? profileId;
 
-      // Check if there's already an active request in the current state to sync chat immediately
+    if (authState is AuthAuthenticated) {
+      profileId = authState.profile.id;
+      context.read<HelpRequestBloc>().add(LoadActiveRequest(profileId));
+      context.read<AdminBloc>().add(LoadAdminData());
+      
       final helpState = context.read<HelpRequestBloc>().state;
-      if (helpState is HelpRequestAccepted) {
+      if (_tabController.index == 1 && helpState is HelpRequestActive && helpState.request.status == 'accepted') {
         context.read<ChatBloc>().add(LoadMessages(helpState.request.id));
       }
+    } else if (authState is AuthOfflineGuest) {
+      // Guest mode: Use a dummy ID and skip online re-fetching
+      profileId = "offline_guest_id";
+    }
 
-      // Create SOS BLoC with victim's ID
+    if (profileId != null) {
       _sosBloc = SosBloc(
         repository: context.read<HelpRequestRepository>(),
-        victimId: authState.profile.id,
+        lowNetworkRepo: context.read<LowNetworkRepository>(),
+        victimId: profileId,
       );
     }
   }
 
   @override
   void dispose() {
-    _timeoutTimer?.cancel();
     _stopVictimLocationPush();
     _pulseController.dispose();
     _messageController.dispose();
@@ -156,6 +166,24 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
     }
   }
 
+  void _onTabChanged() {
+    if (_tabController.index == 1) {
+      final helpState = context.read<HelpRequestBloc>().state;
+      String? requestId;
+      if (helpState is HelpRequestActive && (helpState.request.status == 'accepted' || helpState.request.status == 'completed')) {
+        requestId = helpState.request.id;
+      } else if (helpState is HelpRequestConversation && 
+                helpState.activeRequest != null && 
+                (helpState.activeRequest!.status == 'accepted' || helpState.activeRequest!.status == 'completed')) {
+        requestId = helpState.activeRequest!.id;
+      }
+      
+      if (requestId != null) {
+        context.read<ChatBloc>().add(LoadMessages(requestId));
+      }
+    }
+  }
+
   void _scrollToBottom(ScrollController controller) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (controller.hasClients) {
@@ -194,7 +222,6 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
 
     setState(() {
       _localAiMessages.add({'role': 'user', 'message': text});
-      _canRetry = false;
     });
 
     _scrollToBottom(_n8nScrollController);
@@ -233,6 +260,16 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
 
   void _sendMessage() {
     _stopListening();
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
+
+    // Check connectivity status
+    final connState = context.read<ConnectivityBloc>().state;
+    if (connState.status == ConnectivityStatus.offline) {
+      _handleOfflineMessage(text);
+      return;
+    }
+
     if (_tabController.index == 0) {
       _sendToN8n();
     } else if (_tabController.index == 1) {
@@ -240,7 +277,39 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
       _sendToHelper();
     }
     _messageController.clear();
+  }
 
+  void _handleOfflineMessage(String text) {
+    final locationState = context.read<LocationBloc>().state;
+    if (locationState is LocationLoaded) {
+      // Add to local UI log immediately
+      setState(() {
+        _localAiMessages.add({'role': 'user', 'message': text});
+      });
+      _scrollToBottom(_n8nScrollController);
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => BlocProvider.value(
+          value: _sosBloc!,
+          child: LowNetworkSosSheet(
+            lat: locationState.lat,
+            lon: locationState.lng,
+            initialMessage: text,
+          ),
+        ),
+      );
+      _messageController.clear();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot send SMS: Location unknown'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   @override
@@ -348,6 +417,55 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
         ),
       );
     }
+
+    if (state is SosOfflineInputPending) {
+      // First, pop the VoiceAssistantScreen if it was accidentally opened 
+      // (though branching in Bloc usually prevents this)
+      if (Navigator.of(context).canPop()) {
+         // Check if top is VoiceAssistantScreen... 
+         // For now, just show the Bottom Sheet on top
+      }
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) => BlocProvider.value(
+          value: context.read<SosBloc>(),
+          child: LowNetworkSosSheet(lat: state.lat, lon: state.lon),
+        ),
+      );
+    }
+
+    if (state is SosOfflineSuccess) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'SOS DISPATCHED VIA SMS to ${state.phoneNumber}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.greenAccent.shade700,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+    
+    if (state is SosCaptured) {
+      // 🎙️ PERSIST VOICE COMMAND TO CHAT LOG
+      setState(() {
+        _localAiMessages.add({'role': 'user', 'message': state.message});
+      });
+      _scrollToBottom(_n8nScrollController);
+    }
     // Handoff to HelpRequestBloc is now managed in VoiceAssistantScreen listener
   }
   
@@ -358,33 +476,56 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'CRISIS-MATCH',
-                style: TextStyle(
-                  color: neonCyan,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 2,
+          Expanded(
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'CRISIS-MATCH',
+                  style: TextStyle(
+                    color: neonCyan,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 2,
+                  ),
                 ),
-              ),
-              Text(
-                'ENCRYPTED RESPONSE CHANNEL',
-                style: TextStyle(
-                  color: Colors.blueGrey,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5,
+                Text(
+                  'ENCRYPTED RESPONSE CHANNEL',
+                  style: TextStyle(
+                    color: Colors.blueGrey,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           Row(
             children: [
               // 🛡️ SOS Shield Toggle
-              _buildSosToggle(),
+              // 🛡️ SOS Shield Toggle - Hidden in COMMS tab to prevent state loss
+              if (_tabController.index != 1) _buildSosToggle(),
+              const SizedBox(width: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: glassBorder),
+                ),
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.leaderboard_rounded,
+                    color: gold,
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                    );
+                  },
+                ),
+              ),
               const SizedBox(width: 8),
               Container(
                 decoration: BoxDecoration(
@@ -483,7 +624,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
 
   Widget _buildCyberSwitcher() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: slatePanel.withOpacity(0.5),
@@ -493,6 +634,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
       child: TabBar(
         controller: _tabController,
         onTap: (_) => setState(() {}),
+        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
         indicator: BoxDecoration(
           color: neonCyan.withOpacity(0.15),
           borderRadius: BorderRadius.circular(12),
@@ -505,14 +647,14 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
         labelStyle: const TextStyle(
           fontWeight: FontWeight.w900,
           fontSize: 11,
-          letterSpacing: 1,
+          letterSpacing: 0.5,
         ),
         tabs: [
           const Tab(text: 'AI PROBE'),
           BlocBuilder<HelpRequestBloc, HelpRequestState>(
             builder: (context, state) {
-              final active =
-                  state is HelpRequestAccepted || state is HelpRequestResolved;
+              final active = state is HelpRequestActive && 
+                   (state.request.status == 'accepted' || state.request.status == 'completed');
               return Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -541,26 +683,131 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
     );
   }
 
+  void _showRatingDialog(String requestId) {
+    int rating = 3;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: darkBg,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: neonCyan.withOpacity(0.5)),
+              ),
+              title: const Text(
+                'FIELD AGENT RATING',
+                style: TextStyle(color: neonCyan, fontWeight: FontWeight.bold, letterSpacing: 1),
+                textAlign: TextAlign.center,
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'How was the responder?',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (index) {
+                      return IconButton(
+                        icon: Icon(
+                          index < rating ? Icons.star_rounded : Icons.star_border_rounded,
+                          color: Colors.amber,
+                          size: 36,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            rating = index + 1;
+                          });
+                        },
+                      );
+                    }),
+                  ),
+                  if (rating == 3)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        'Defaulting to 3 stars if skipped.',
+                        style: TextStyle(color: Colors.blueGrey, fontSize: 10),
+                      ),
+                    ),
+                ],
+              ),
+              actionsAlignment: MainAxisAlignment.center,
+              actions: [
+                TextButton(
+                  onPressed: () async {
+                    // Skip applies default 3
+                    Navigator.pop(ctx);
+                    await context.read<LeaderboardRepository>().submitRating(requestId, 3);
+                  },
+                  child: const Text('SKIP', style: TextStyle(color: Colors.blueGrey)),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await context.read<LeaderboardRepository>().submitRating(requestId, rating);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Rating submitted. Thank you!'),
+                        backgroundColor: neonCyan,
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: neonCyan,
+                    foregroundColor: darkBg,
+                  ),
+                  child: const Text('SUBMIT', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildActiveAlertPanel() {
     return BlocConsumer<HelpRequestBloc, HelpRequestState>(
       listener: (context, state) {
-        if (state is HelpRequestAccepted) {
-          context.read<ChatBloc>().add(LoadMessages(state.request.id));
-          _timeoutTimer?.cancel();
-          _tabController.animateTo(1);
-          _startVictimLocationPush(state.request.id);
+        if (state is HelpRequestActive) {
+          final req = state.request;
+          
+          if (req.status == 'accepted') {
+            // Intelligent Tab Switch: Only switch to COMMS if not already on a tracking/history tab
+            if (_tabController.index == 0) {
+              _tabController.animateTo(1);
+            }
+            _startVictimLocationPush(req.id);
+          } else if (req.status == 'rejected') {
+            _stopVictimLocationPush();
+          } else if (req.status == 'pending') {
+            _startVictimLocationPush(req.id);
+          } else if (req.status == 'completed') {
+             _stopVictimLocationPush();
+             if (!_hasShownRatingDialog) {
+               _hasShownRatingDialog = true;
+               
+               // Async check to prevent showing dialog on every app restart if already rated
+               context.read<LeaderboardRepository>().hasSessionBeenRated(req.id).then((alreadyRated) {
+                 if (!alreadyRated && mounted) {
+                   _showRatingDialog(req.id);
+                 }
+               });
+             }
+          }
         }
-        if (state is HelpRequestRejected) {
-          _timeoutTimer?.cancel();
+        
+        if (state is HelpRequestInitial) {
           _stopVictimLocationPush();
-          setState(() => _canRetry = true);
+          _hasShownRatingDialog = false;
         }
-        if (state is HelpRequestPending) {
-          _startVictimLocationPush(state.request.id);
-        }
-        if (state is HelpRequestInitial || state is HelpRequestResolved) {
-          _stopVictimLocationPush();
-        }
+
         if (state is HelpRequestConversation) {
           setState(() {
             _localAiMessages.add({'role': 'bot', 'message': state.message});
@@ -573,54 +820,65 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
         }
       },
       builder: (context, state) {
+        if (state is HelpRequestInitial) {
+          return const SizedBox.shrink();
+        }
+        
         if (state is HelpRequestSearching) {
-          return _buildSearchingRadar();
+          // Find if we have a current request to cancel (from persistent BLoC state)
+          final activeReq = context.read<HelpRequestBloc>().currentActiveRequest;
+          return _buildSearchingRadar(activeReq?.id);
         }
-        if (state is HelpRequestPending || state is HelpRequestRejected) {
-          return _buildNeonMatchCard(state as HelpRequestActive);
-        }
-        if (state is HelpRequestAccepted) {
-          return _buildNeonStatusHeader(
-            '${state.request.helperName ?? "Responder"} IS EN ROUTE',
-            neonCyan,
-            Icons.speed_rounded,
-            true, // Show map button
-            state,
-          );
-        }
-        if (state is HelpRequestResolved) {
-          return _buildNeonStatusHeader(
-            'THREAT NEUTRALIZED / AID DELIVERED',
-            Colors.greenAccent,
-            Icons.verified_rounded,
-            false,
-            state,
-          );
-        }
-        if (state is HelpRequestConversation && state.activeRequest != null) {
-          final req = state.activeRequest!;
+        
+        if (state is HelpRequestActive) {
+          final req = state.request;
           if (req.status == 'accepted') {
             return _buildNeonStatusHeader(
               '${req.helperName ?? "Responder"} IS EN ROUTE',
               neonCyan,
               Icons.speed_rounded,
-              true,
-              HelpRequestAccepted(req),
+              true, // Show map button
+              state,
             );
-          } else if (req.status == 'pending' || req.status == 'rejected') {
-            return _buildNeonMatchCard(HelpRequestPending(req));
+          } else if (req.status == 'completed') {
+            return _buildNeonStatusHeader(
+              'THREAT NEUTRALIZED / AID DELIVERED',
+              Colors.greenAccent,
+              Icons.verified_rounded,
+              false,
+              state,
+            );
+          } else if (req.status == 'pending') {
+            return _buildNeonMatchCard(state);
           }
+        }
+        
+        if (state is HelpRequestConversation) {
+          final req = state.activeRequest;
+          if (req != null) {
+            if (req.status == 'pending' || req.status == 'accepted') {
+              return _buildNeonMatchCard(HelpRequestActive(
+                req,
+                matchedId: state.matchedId,
+                distance: state.distance,
+              ));
+            } else if (req.status == 'rejected') {
+              return _buildSearchingRadar(req.id);
+            }
+          }
+          // Default: Just chatting or search failed, show nothing.
+          return const SizedBox.shrink();
         }
         return const SizedBox.shrink();
       },
     );
   }
 
-  Widget _buildSearchingRadar() {
+  Widget _buildSearchingRadar([String? requestId]) {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: slatePanel.withOpacity(0.3),
         borderRadius: BorderRadius.circular(20),
@@ -628,37 +886,74 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
       ),
       child: Column(
         children: [
-          ScaleTransition(
-            scale: Tween(begin: 0.9, end: 1.1).animate(
-              CurvedAnimation(
-                parent: _pulseController,
-                curve: Curves.easeInOut,
-              ),
-            ),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: neonCyan.withOpacity(0.3),
-                    blurRadius: 20,
-                    spreadRadius: 5,
+          Row(
+            children: [
+              ScaleTransition(
+                scale: Tween(begin: 0.9, end: 1.1).animate(
+                  CurvedAnimation(
+                    parent: _pulseController,
+                    curve: Curves.easeInOut,
                   ),
-                ],
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: neonCyan.withOpacity(0.3),
+                        blurRadius: 15,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.radar_rounded, color: neonCyan, size: 24),
+                ),
               ),
-              child: const Icon(Icons.radar_rounded, color: neonCyan, size: 32),
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'UPLINK ACTIVE: LOCATING NEAREST RESPONDER...',
-            style: TextStyle(
-              color: neonCyan,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.2,
-            ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'UPLINK ACTIVE: LOCATING RESPONDER...',
+                  style: TextStyle(
+                    color: neonCyan,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+              ),
+              // --- STOP SEARCH BUTTON ---
+              TextButton(
+                onPressed: () {
+                  if (requestId != null) {
+                    context.read<HelpRequestBloc>().add(
+                      UpdateHelpRequestStatus(
+                        requestId: requestId,
+                        status: 'cancelled',
+                      ),
+                    );
+                  } else {
+                    // Local fallback if no ID yet (Initial search phase)
+                    context.read<HelpRequestBloc>().add(ClearHelpRequest());
+                  }
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: neonOrange,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(color: neonOrange.withOpacity(0.3)),
+                  ),
+                ),
+                child: const Text(
+                  'STOP SEARCH',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -666,7 +961,9 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
   }
 
   Widget _buildNeonMatchCard(HelpRequestActive state) {
-    final isRejected = state is HelpRequestRejected;
+    final status = state.request.status;
+    final isRejected = status == 'rejected';
+    final isPending = status == 'pending';
     final color = isRejected ? neonOrange : neonCyan;
 
     return Container(
@@ -755,84 +1052,46 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                   ],
                 ),
                 const SizedBox(height: 20),
-                if (state is! HelpRequestPending && (isRejected || _canRetry))
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        final authState = context.read<AuthBloc>().state;
-                        if (authState is AuthAuthenticated) {
-                          final locState = context.read<LocationBloc>().state;
-                          if (locState is LocationLoaded) {
-                            setState(() {
-                              _canRetry = false;
-                              _localAiMessages.add({
-                                'role': 'bot',
-                                'message': 'Write you help request again...',
-                              });
-                            });
-                            // Fresh search using original crisis type but current location
-                            context.read<HelpRequestBloc>().add(
-                              FindHelper(
-                                message: state.request.crisisType,
-                                victimId: authState.profile.id,
-                                lat: locState.lat,
-                                lng: locState.lng,
-                              ),
-                            );
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('WAITING FOR GPS LOCK...'),
-                                backgroundColor: neonOrange,
-                              ),
-                            );
-                          }
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: neonCyan,
-                        foregroundColor: darkBg,
-                        elevation: 10,
-                        shadowColor: neonCyan.withOpacity(0.5),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'RE-SCAN FOR PROXIMITY',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1,
-                        ),
-                      ),
+                // --- DISTANCE & ETA ---
+                if (state.request.distance != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: darkBg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: glassBorder),
                     ),
-                  )
-                else
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(
-                        width: 12,
-                        height: 12,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation(neonCyan),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on_rounded, color: neonCyan, size: 16),
+                            const SizedBox(width: 8),
+                            Text(
+                              state.request.distance!,
+                              style: const TextStyle(
+                                color: neonCyan,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'WAITING FOR ENCRYPTION HANDSHAKE...',
-                        style: TextStyle(
-                          color: Colors.blueGrey.shade400,
-                          fontSize: 10,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ],
+                        if (isPending)
+                          Text(
+                            'AWAITING ACCEPTANCE...',
+                            style: TextStyle(
+                              color: neonOrange,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-              ],
+              ]
             ),
           ),
         ],
@@ -983,7 +1242,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  'AI CORE READY',
+                  'AI ASSISTANT READY',
                   style: TextStyle(
                     color: neonCyan,
                     fontSize: 20,
@@ -1037,8 +1296,10 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
   Widget _buildHelperChat() {
     return BlocBuilder<HelpRequestBloc, HelpRequestState>(
       builder: (context, helpState) {
-        if (helpState is! HelpRequestAccepted &&
-            helpState is! HelpRequestResolved) {
+        final isActiveMission = helpState is HelpRequestActive && 
+                   (helpState.request.status == 'accepted' || helpState.request.status == 'completed');
+        
+        if (!isActiveMission) {
           return Center(
             child: Opacity(
               opacity: 0.3,
@@ -1202,9 +1463,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
           return const SizedBox.shrink();
         }
 
-        bool isResolved =
-            (helpState is HelpRequestResolved) ||
-            (helpState is HelpRequestActive &&
+        bool isResolved = (helpState is HelpRequestActive &&
                 helpState.request.status == 'completed');
         bool disableAiInput =
             _tabController.index == 0 && (helpState is HelpRequestSearching);
@@ -1292,28 +1551,36 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                 ),
               ),
               const SizedBox(width: 12),
-              GestureDetector(
-                onTap: disableAiInput ? null : _sendMessage,
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: disableAiInput ? Colors.blueGrey.shade800 : neonCyan,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      if (!disableAiInput)
-                        BoxShadow(
-                          color: neonCyan.withOpacity(0.4),
-                          blurRadius: 15,
-                          spreadRadius: 2,
-                        ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.arrow_upward_rounded,
-                    color: darkBg,
-                    size: 24,
-                  ),
-                ),
+              BlocBuilder<ConnectivityBloc, ConnectivityState>(
+                builder: (context, connState) {
+                  final isOffline = connState.status == ConnectivityStatus.offline;
+                  final color = isOffline ? neonOrange : neonCyan;
+                  final icon = isOffline ? Icons.sms_rounded : Icons.arrow_upward_rounded;
+                  
+                  return GestureDetector(
+                    onTap: disableAiInput ? null : _sendMessage,
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: disableAiInput ? Colors.blueGrey.shade800 : color,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          if (!disableAiInput)
+                            BoxShadow(
+                              color: color.withOpacity(0.4),
+                              blurRadius: 15,
+                              spreadRadius: 2,
+                            ),
+                        ],
+                      ),
+                      child: Icon(
+                        icon,
+                        color: darkBg,
+                        size: 24,
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),

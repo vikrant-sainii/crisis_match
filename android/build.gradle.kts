@@ -33,6 +33,24 @@ subprojects {
     }
 }
 
+subprojects {
+    if (project.name == "telephony") {
+        val fixNamespace = Action<Project> {
+            if (project.hasProperty("android")) {
+                val android = project.extensions.getByName("android") as com.android.build.gradle.BaseExtension
+                if (android.namespace == null) {
+                    android.namespace = "com.shounakmulay.telephony"
+                }
+            }
+        }
+        if (project.state.executed) {
+            fixNamespace.execute(project)
+        } else {
+            project.afterEvaluate(fixNamespace)
+        }
+    }
+}
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
