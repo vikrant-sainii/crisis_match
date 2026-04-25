@@ -42,6 +42,7 @@ class ProfileModel extends Equatable {
   final bool isBlocked;
   final DateTime? blockedUntil;
   final String? fcmToken;
+  final String? idHash;
   final List<EmergencyContact> emergencyContacts;
 
   const ProfileModel({
@@ -55,6 +56,7 @@ class ProfileModel extends Equatable {
     this.isBlocked = false,
     this.blockedUntil,
     this.fcmToken,
+    this.idHash,
     this.emergencyContacts = const [],
   });
 
@@ -74,6 +76,7 @@ class ProfileModel extends Equatable {
           ? DateTime.parse(json['blocked_until'] as String)
           : null,
       fcmToken: json['fcm_token'] as String?,
+      idHash: json['id_hash'] as String?,
       emergencyContacts: (json['emergency_contacts'] as List? ?? [])
           .map((e) => EmergencyContact.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -91,6 +94,7 @@ class ProfileModel extends Equatable {
       'is_blocked': isBlocked,
       'blocked_until': blockedUntil?.toIso8601String(),
       'fcm_token': fcmToken,
+      'id_hash': idHash,
       'emergency_contacts': emergencyContacts.map((e) => e.toJson()).toList(),
     };
   }
@@ -107,6 +111,7 @@ class ProfileModel extends Equatable {
         isBlocked,
         blockedUntil,
         fcmToken,
+        idHash,
         emergencyContacts,
       ];
 
@@ -117,6 +122,7 @@ class ProfileModel extends Equatable {
     bool? isBlocked,
     DateTime? blockedUntil,
     String? fcmToken,
+    String? idHash,
     List<EmergencyContact>? emergencyContacts,
   }) {
     return ProfileModel(
@@ -130,6 +136,7 @@ class ProfileModel extends Equatable {
       isBlocked: isBlocked ?? this.isBlocked,
       blockedUntil: blockedUntil ?? this.blockedUntil,
       fcmToken: fcmToken ?? this.fcmToken,
+      idHash: idHash ?? this.idHash,
       emergencyContacts: emergencyContacts ?? this.emergencyContacts,
     );
   }

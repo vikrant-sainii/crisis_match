@@ -53,6 +53,19 @@ class _HelperProfileScreenState extends State<HelperProfileScreen> {
     
     final profile = authState.profile;
 
+    const saffron = Color(0xFFFF9933);
+    const green = Color(0xFF138808);
+    const tricolorGradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        saffron,
+        Colors.white,
+        green,
+      ],
+      stops: [0.0, 0.5, 1.0],
+    );
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -82,11 +95,12 @@ class _HelperProfileScreenState extends State<HelperProfileScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
-                color: Colors.white,
+                gradient: tricolorGradient,
                 borderRadius: BorderRadius.circular(32),
+                border: Border.all(color: Colors.white.withOpacity(0.5)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
+                    color: Colors.black.withOpacity(0.05),
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
@@ -96,7 +110,7 @@ class _HelperProfileScreenState extends State<HelperProfileScreen> {
                 children: [
                   CircleAvatar(
                     radius: 50,
-                    backgroundColor: theme.primaryColor.withOpacity(0.1),
+                    backgroundColor: Colors.white.withOpacity(0.9),
                     child: Icon(Icons.support_agent_rounded, color: theme.primaryColor, size: 50),
                   ),
                   const SizedBox(height: 20),
@@ -106,16 +120,24 @@ class _HelperProfileScreenState extends State<HelperProfileScreen> {
                       fontWeight: FontWeight.w900,
                       fontSize: 20,
                       letterSpacing: 1,
+                      color: Color(0xFF1E293B),
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    'SAHAYAK ACCOUNT',
-                    style: TextStyle(
-                      color: theme.primaryColor,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 11,
-                      letterSpacing: 2,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'SAHAYAK ACCOUNT',
+                      style: TextStyle(
+                        color: theme.primaryColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11,
+                        letterSpacing: 2,
+                      ),
                     ),
                   ),
                 ],

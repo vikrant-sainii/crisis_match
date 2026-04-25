@@ -261,6 +261,27 @@ class HelpRequestRepository {
         .eq('request_id', requestId);
   }
 
+  /// Send DigiLocker code to n8n for full verification
+  Future<Map<String, dynamic>> verifyIdentityWithN8n(String code) async {
+    final url = SupabaseConfig.n8nDigiLockerUrl;
+    developer.log('HelpReqRepo: Verifying DigiLocker code at n8n...');
+
+    final response = await http
+        .post(
+          Uri.parse(url),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'code': code,
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('DigiLocker Verification Failed: ${response.statusCode}');
+  }
+
   /// Dedicated trigger for Women Safety SOS
   Future<Map<String, dynamic>> triggerWomenSafetySos({
     required String victimId,

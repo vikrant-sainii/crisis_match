@@ -16,6 +16,8 @@ class SupabaseConfig {
       'https://crisis-match.app.n8n.cloud/webhook-test/voice';
   static const String womensafeturl =
       'https://crisis-match.app.n8n.cloud/webhook-test/women-safety';
+  static const String n8nDigiLockerUrl =
+      'https://crisis-match.app.n8n.cloud/webhook-test/digilocker-verify';
 }
 
 

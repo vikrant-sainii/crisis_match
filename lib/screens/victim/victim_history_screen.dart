@@ -136,12 +136,16 @@ class _VictimHistoryScreenState extends State<VictimHistoryScreen> {
                       children: [
                         Icon(Icons.person_pin_rounded, size: 12, color: Colors.blueGrey.shade300),
                         const SizedBox(width: 4),
-                        Text(
-                          'RESPONDER: ${req.helperName ?? "ANON"}',
-                          style: TextStyle(
-                            color: Colors.blueGrey.shade400,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                        Expanded(
+                          child: Text(
+                            'RESPONDER: ${req.helperName ?? "ANON"}',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: Colors.blueGrey.shade400,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],

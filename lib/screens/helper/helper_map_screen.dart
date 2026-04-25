@@ -6,6 +6,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/help_request_model.dart';
 import '../../config/supabase_config.dart';
 import '../../repositories/help_request_repository.dart';
@@ -122,6 +123,35 @@ class _HelperMapScreenState extends State<HelperMapScreen> {
             }
           }
         });
+        _updatePolyline();
+  }
+
+  Future<void> _moveToMyLocation() async {
+    if (_myLocation == null) return;
+    final controller = await _mapController.future;
+    controller.animateCamera(
+      CameraUpdate.newLatLngZoom(_myLocation!, 16),
+    );
+  }
+
+  Future<void> _openExternalMaps() async {
+    if (_victimLocation == null) return;
+    final url = 'https://www.google.com/maps/dir/?api=1&destination=${_victimLocation!.latitude},${_victimLocation!.longitude}&travelmode=driving';
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  void _updatePolyline() {
+    if (_myLocation != null && _victimLocation != null) {
+      _distanceMeters = Geolocator.distanceBetween(
+        _myLocation!.latitude,
+        _myLocation!.longitude,
+        _victimLocation!.latitude,
+        _victimLocation!.longitude,
+      );
+    }
   }
 
   void _updateDistance() {
@@ -372,7 +402,8 @@ class _HelperMapScreenState extends State<HelperMapScreen> {
                   ),
                 ),
                 ElevatedButton.icon(
-                  onPressed: () {}, // Optional: Open system maps
+                  onPressed: _moveToMyLocation,
+                  onLongPress: _openExternalMaps,
                   icon: const Icon(Icons.navigation_rounded, size: 18),
                   label: const Text('NAVIGATE'),
                   style: ElevatedButton.styleFrom(

@@ -512,14 +512,28 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
         ? neonOrange
         : Colors.blueGrey;
 
+    const saffron = Color(0xFFFF9933);
+    const green = Color(0xFF138808);
+    const tricolorGradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        saffron,
+        Colors.white,
+        green,
+      ],
+      stops: [0.0, 0.5, 1.0],
+    );
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: tricolorGradient,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.6)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -539,44 +553,50 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      request.crisisType.toUpperCase(),
-                      style: TextStyle(
-                        color: cardColor,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 13,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    if (isPending && request.priorityScore != null) ...[
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: (request.priorityScore! > 100)
-                              ? Colors.orange.withValues(alpha: 0.1)
-                              : neonCyan.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
                         child: Text(
-                          'PRIORITY: ${request.priorityScore!.toStringAsFixed(0)}',
+                          request.crisisType.toUpperCase(),
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: (request.priorityScore! > 100)
-                                ? Colors.orange
-                                : neonCyan,
-                            fontSize: 9,
+                            color: cardColor,
                             fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                            letterSpacing: 1,
                           ),
                         ),
                       ),
+                      if (isPending && request.priorityScore != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: (request.priorityScore! > 100)
+                                ? Colors.orange.withValues(alpha: 0.1)
+                                : neonCyan.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'P:${request.priorityScore!.toStringAsFixed(0)}',
+                            style: TextStyle(
+                              color: (request.priorityScore! > 100)
+                                  ? Colors.orange
+                                  : neonCyan,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 StatusBadge(status: request.status),
               ],
             ),
@@ -615,6 +635,8 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
                         children: [
                           Text(
                             request.victimName ?? "ANONYMOUS CLIENT",
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                             style: const TextStyle(
                               color: Color(0xFF1E293B),
                               fontSize: 17,
@@ -688,17 +710,19 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
                           ),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: neonOrange,
-                            side: const BorderSide(color: neonOrange),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: const BorderSide(color: neonOrange, width: 1.5),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            backgroundColor: Colors.white.withOpacity(0.8),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(16),
                             ),
                           ),
                           child: const Text(
                             'DECLINE',
                             style: TextStyle(
                               fontWeight: FontWeight.w900,
-                              letterSpacing: 2,
+                              letterSpacing: 1,
+                              fontSize: 12,
                             ),
                           ),
                         ),
@@ -734,13 +758,15 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            elevation: 0,
+                            elevation: 8,
+                            shadowColor: neonCyan.withOpacity(0.3),
                           ),
                           child: const Text(
                             'ACCEPT MISSION',
                             style: TextStyle(
                               fontWeight: FontWeight.w900,
                               letterSpacing: 1,
+                              fontSize: 12,
                             ),
                           ),
                         ),

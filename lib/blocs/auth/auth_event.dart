@@ -19,6 +19,7 @@ class AuthSignUpRequested extends AuthEvent {
   // Helper-specific fields
   final String? occupation;
   final String? state;
+  final String? idHash;
 
   const AuthSignUpRequested({
     required this.email,
@@ -28,6 +29,7 @@ class AuthSignUpRequested extends AuthEvent {
     this.phone,
     this.occupation,
     this.state,
+    this.idHash,
   });
 
   @override
