@@ -49,6 +49,19 @@ class DistressCaptured extends SosEvent {
 
 
 
+/// User selects Woman Safety alert from the choice screen
+class SelectWomanSafetyAction extends SosEvent {
+  final double lat;
+  final double lon;
+  const SelectWomanSafetyAction(this.lat, this.lon);
+
+  @override
+  List<Object?> get props => [lat, lon];
+}
+
+/// User selects Voice Assist from the choice screen
+class SelectVoiceAssistAction extends SosEvent {}
+
 /// New event to pipe background sensor values for testing
 class SensorDebugDataReceived extends SosEvent {
   final double gZ;

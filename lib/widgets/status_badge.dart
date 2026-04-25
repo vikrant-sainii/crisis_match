@@ -12,7 +12,7 @@ class StatusBadge extends StatelessWidget {
       case 'matched':
         return const Color(0xFF38BDF8); // Neon Blue
       case 'accepted':
-        return const Color(0xFF22D3EE); // Neon Cyan
+        return const Color(0xFF138808); // Green
       case 'rejected':
         return const Color(0xFFF87171); // Soft Red
       case 'completed':
@@ -26,27 +26,49 @@ class StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = _getColor();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.5), width: 1.5),
+        color: Colors.white.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.15),
-            blurRadius: 10,
-            spreadRadius: 1,
+            color: color.withValues(alpha: 0.1),
+            blurRadius: 15,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      child: Text(
-        status.toUpperCase(),
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w900,
-          fontSize: 9,
-          letterSpacing: 1.2,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Glowing status dot
+          Container(
+            width: 5,
+            height: 5,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.4),
+                  blurRadius: 4,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            status.toUpperCase(),
+            style: TextStyle(
+              color: color.withValues(alpha: 0.85),
+              fontWeight: FontWeight.w900,
+              fontSize: 9,
+              letterSpacing: 1.1,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -65,6 +65,35 @@ class LeaderboardRepository {
     }
   }
 
+  /// Fetches detailed stats for a specific helper by profile_id
+  Future<LeaderboardEntry?> getHelperWithStats(String profileId) async {
+    try {
+      final data = await _client.from('helpers').select('''
+            id,
+            occupation,
+            lat,
+            lng,
+            total_score,
+            total_helps,
+            avg_rating,
+            profiles!helpers_profile_id_fkey ( full_name, phone )
+          ''').eq('profile_id', profileId).maybeSingle();
+
+      if (data == null) return null;
+
+      final json = Map<String, dynamic>.from(data as Map);
+      final profile = json['profiles'] as Map?;
+      json['name'] = profile?['full_name'] ?? 'Anonymous';
+      json['phone'] = profile?['phone'];
+      json['helper_id'] = json['id'];
+      
+      return LeaderboardEntry.fromJson(json, rank: 0);
+    } catch (e) {
+      developer.log('LeaderboardRepo: Error fetching helper stats: $e');
+      return null;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // HELP SESSION MANAGEMENT (Scoring)
   // ---------------------------------------------------------------------------
@@ -153,6 +182,20 @@ class LeaderboardRepository {
       developer.log('LeaderboardRepo: Rating $stars submitted for request $requestId');
     } catch (e) {
       developer.log('LeaderboardRepo: Error submitting rating: $e');
+    }
+  }
+
+  /// Get the actual rating value given by the victim
+  Future<int?> getSessionRating(String requestId) async {
+    try {
+      final data = await _client
+          .from('help_sessions')
+          .select('victim_rating')
+          .eq('request_id', requestId)
+          .maybeSingle();
+      return data?['victim_rating'] as int?;
+    } catch (e) {
+      return null;
     }
   }
 

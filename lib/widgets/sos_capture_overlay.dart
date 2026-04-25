@@ -52,7 +52,7 @@ class _SosCaptureOverlayState extends State<SosCaptureOverlay>
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: darkBg.withOpacity(0.95),
+      color: darkBg.withValues(alpha: 0.95),
       child: SafeArea(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -69,11 +69,11 @@ class _SosCaptureOverlayState extends State<SosCaptureOverlay>
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: neonRed.withOpacity(0.15),
-                  border: Border.all(color: neonRed.withOpacity(0.5), width: 2),
+                  color: neonRed.withValues(alpha: 0.15),
+                  border: Border.all(color: neonRed.withValues(alpha: 0.5), width: 2),
                   boxShadow: [
                     BoxShadow(
-                      color: neonRed.withOpacity(0.3),
+                      color: neonRed.withValues(alpha: 0.3),
                       blurRadius: 30,
                       spreadRadius: 5,
                     ),
@@ -118,11 +118,11 @@ class _SosCaptureOverlayState extends State<SosCaptureOverlay>
                       width: 4,
                       height: height.abs().clamp(5, 50),
                       decoration: BoxDecoration(
-                        color: neonRed.withOpacity(0.8),
+                        color: neonRed.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(2),
                         boxShadow: [
                           BoxShadow(
-                            color: neonRed.withOpacity(0.3),
+                            color: neonRed.withValues(alpha: 0.3),
                             blurRadius: 4,
                           ),
                         ],
@@ -139,9 +139,9 @@ class _SosCaptureOverlayState extends State<SosCaptureOverlay>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               decoration: BoxDecoration(
-                color: neonRed.withOpacity(0.1),
+                color: neonRed.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: neonRed.withOpacity(0.3)),
+                border: Border.all(color: neonRed.withValues(alpha: 0.3)),
               ),
               child: Text(
                 'RECORDING... ${widget.secondsRemaining}s',

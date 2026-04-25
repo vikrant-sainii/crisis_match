@@ -28,7 +28,31 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthSignUpRequested>(_onSignUp);
     on<AuthSignInRequested>(_onSignIn);
     on<AuthSignOutRequested>(_onSignOut);
+    on<AuthUpdateEmergencyContactsRequested>(_onUpdateEmergencyContacts);
   }
+
+  Future<void> _onUpdateEmergencyContacts(
+    AuthUpdateEmergencyContactsRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    final currentState = state;
+    if (currentState is AuthAuthenticated) {
+      try {
+        await _authRepository.updateEmergencyContacts(
+          currentState.profile.id,
+          event.contacts,
+        );
+        final updatedProfile =
+            currentState.profile.copyWith(emergencyContacts: event.contacts);
+        emit(AuthAuthenticated(updatedProfile));
+      } catch (e) {
+        emit(AuthError('Failed to update emergency contacts: ${e.toString()}'));
+        // Re-emit original state to recover
+        emit(AuthAuthenticated(currentState.profile));
+      }
+    }
+  }
+
 
   Future<void> _onCheckStatus(
     AuthCheckStatus event,

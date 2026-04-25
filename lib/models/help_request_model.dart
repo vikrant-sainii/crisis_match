@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:equatable/equatable.dart';
 
 class HelpRequestModel extends Equatable {
@@ -14,6 +15,7 @@ class HelpRequestModel extends Equatable {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? matchedId; // ID from the matching session/table
+  final double? priorityScore; // Non-persistent calculated priority score
 
   // Joined fields (not in request_table, but fetched via SQL joins or n8n JSON)
   final double? helperLat; // Base/On-duty lat
@@ -45,6 +47,7 @@ class HelpRequestModel extends Equatable {
     this.distance,
     this.victimName,
     this.matchedId,
+    this.priorityScore,
   });
 
   factory HelpRequestModel.fromJson(Map<String, dynamic> json) {
@@ -87,6 +90,7 @@ class HelpRequestModel extends Equatable {
       distance: json['distance']?.toString(), // From n8n response
       victimName: json['victim_name'] as String?, // From Supabase join
       matchedId: json['matched_id'] as String?,
+      priorityScore: json['priority_score']?.toDouble(),
     );
   }
 
@@ -121,6 +125,7 @@ class HelpRequestModel extends Equatable {
     String? helperPhone,
     String? distance,
     String? matchedId,
+    double? priorityScore,
   }) {
     return HelpRequestModel(
       id: id,
@@ -143,7 +148,28 @@ class HelpRequestModel extends Equatable {
       distance: distance ?? this.distance,
       victimName: victimName ?? victimName,
       matchedId: matchedId ?? this.matchedId,
+      priorityScore: priorityScore ?? this.priorityScore,
     );
+  }
+
+  /// Calculates the dynamic priority score based on wait time and distance
+  /// Formula: Score = (WaitTimeSecs * 0.5) - (DistanceKM * 2.0)
+  double calculatePriorityScore(double helperLat, double helperLon) {
+    if (createdAt == null) return 0.0;
+
+    final waitTimeSecs = DateTime.now().difference(createdAt!).inSeconds;
+    
+    // Calculate distance in KM using Haversine
+    const p = 0.017453292519943295; // Math.PI / 180
+    final a = 0.5 -
+        math.cos((victimCurrLat - helperLat) * p) / 2 +
+        math.cos(helperLat * p) *
+            math.cos(victimCurrLat * p) *
+            (1 - math.cos((victimCurrLong - helperLon) * p)) /
+            2;
+    final distanceKm = 12742 * math.asin(math.sqrt(a));
+
+    return (waitTimeSecs * 0.5) - (distanceKm * 2.0);
   }
 
   @override
@@ -166,5 +192,6 @@ class HelpRequestModel extends Equatable {
         distance,
         victimName,
         matchedId,
+        priorityScore,
       ];
 }

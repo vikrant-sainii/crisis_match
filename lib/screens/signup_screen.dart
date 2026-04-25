@@ -17,19 +17,13 @@ class _SignupScreenState extends State<SignupScreen> {
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _stateController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   String _role = 'victim';
 
-  // 🌃 CYBER-DARK THEME CONSTANTS
-  static const Color darkBg = Color(0xFF0F172A);
-  static const Color slatePanel = Color(0xFF1E293B);
-  static const Color neonCyan = Color(0xFF22D3EE);
-  static const Color glassBorder = Color(0x3394A3B8);
-
-  List<String> _availableOccupations = [];
-  bool _isLoadingOccupations = true;
-  String? _selectedOccupation;
+  // 🏙 SOFT UI THEME CONSTANTS
+  static const Color darkBg = Color(0xFFF8FAFC);
+  static const Color neonCyan = Color(0xFF2563EB); // Trust Blue
+  static const Color glassBorder = Color(0xFFE2E8F0);
 
   @override
   void dispose() {
@@ -37,31 +31,12 @@ class _SignupScreenState extends State<SignupScreen> {
     _passwordController.dispose();
     _nameController.dispose();
     _phoneController.dispose();
-    _stateController.dispose();
     super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
-    _fetchOccupations();
-  }
-
-  Future<void> _fetchOccupations() async {
-    try {
-      final occupations = await HelperRepository().getAvailableOccupations();
-      if (mounted) {
-        setState(() {
-          _availableOccupations = occupations;
-          _isLoadingOccupations = false;
-          if (_availableOccupations.isNotEmpty) {
-            _selectedOccupation = _availableOccupations.first;
-          }
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _isLoadingOccupations = false);
-    }
   }
 
   @override
@@ -69,9 +44,13 @@ class _SignupScreenState extends State<SignupScreen> {
     return Scaffold(
       backgroundColor: darkBg,
       appBar: AppBar(
-        title: const Text('JOIN THE GRID', style: TextStyle(color:Colors.white,fontWeight: FontWeight.w900, letterSpacing: 2)),
-        backgroundColor: Colors.transparent,
+        title: const Text('CREATE ACCOUNT', style: TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+        backgroundColor: Colors.white,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF1E293B), size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {
@@ -94,7 +73,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   controller: _nameController,
                   label: 'FULL NAME',
                   icon: Icons.person_rounded,
-                  validator: (v) => v == null || v.isEmpty ? 'REQUIRED' : null,
+                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                 ),
                 const SizedBox(height: 20),
                 _buildCyberTextField(
@@ -102,78 +81,29 @@ class _SignupScreenState extends State<SignupScreen> {
                   label: 'EMAIL ADDRESS',
                   icon: Icons.alternate_email_rounded,
                   keyboardType: TextInputType.emailAddress,
-                  validator: (v) => v == null || v.isEmpty ? 'REQUIRED' : null,
+                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                 ),
                 const SizedBox(height: 20),
                 _buildCyberTextField(
                   controller: _passwordController,
-                  label: 'SECURITY KEY',
+                  label: 'PASSWORD',
                   icon: Icons.vpn_key_rounded,
                   obscureText: true,
-                  validator: (v) => v == null || v.length < 6 ? 'MIN 6 CHAR' : null,
+                  validator: (v) => v == null || v.length < 6 ? 'Min 6 characters' : null,
                 ),
                 const SizedBox(height: 20),
                 _buildCyberTextField(
                   controller: _phoneController,
-                  label: 'COMMS LINK (PHONE)',
+                  label: 'PHONE NUMBER',
                   icon: Icons.phone_android_rounded,
                   keyboardType: TextInputType.phone,
                 ),
-                const SizedBox(height: 32),
-                const Text('SYSTEM ROLE:', style: TextStyle(color: neonCyan, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(color: slatePanel, borderRadius: BorderRadius.circular(16), border: Border.all(color: glassBorder)),
-                  child: SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'victim', label: Text('VICTIM', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
-                      ButtonSegment(value: 'helper', label: Text('HELPER', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
-                      ButtonSegment(value: 'admin', label: Text('ADMIN', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
-                    ],
-                    selected: {_role},
-                    onSelectionChanged: (v) => setState(() => _role = v.first),
-                    style: SegmentedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      selectedBackgroundColor: neonCyan.withOpacity(0.2),
-                      selectedForegroundColor: neonCyan,
-                      foregroundColor: Colors.blueGrey,
-                    ),
-                  ),
-                ),
-                if (_role == 'helper') ...[
-                  const SizedBox(height: 24),
-                  const Text('SPECIALIZATION:', style: TextStyle(color: neonCyan, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                  const SizedBox(height: 12),
-                  _isLoadingOccupations
-                      ? const Center(child: CircularProgressIndicator(color: neonCyan))
-                      : Container(
-                          decoration: BoxDecoration(color: slatePanel, borderRadius: BorderRadius.circular(16), border: Border.all(color: glassBorder)),
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _selectedOccupation,
-                              dropdownColor: slatePanel,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                              decoration: const InputDecoration(border: InputBorder.none),
-                              items: _availableOccupations
-                                  .map((o) => DropdownMenuItem(value: o, child: Text(o.toUpperCase(), style: const TextStyle(fontSize: 13))))
-                                  .toList(),
-                              onChanged: (v) => setState(() => _selectedOccupation = v),
-                            ),
-                          ),
-                        ),
-                  const SizedBox(height: 20),
-                  _buildCyberTextField(controller: _stateController, label: 'OPERATIONAL STATE', icon: Icons.map_rounded),
-                ],
+
                 const SizedBox(height: 48),
                 BlocBuilder<AuthBloc, AuthState>(
                   builder: (context, state) {
-                    return Container(
-                      height: 56,
-                      decoration: BoxDecoration(
-                        boxShadow: [BoxShadow(color: neonCyan.withOpacity(0.2), blurRadius: 20, spreadRadius: 2)],
-                      ),
+                    return SizedBox(
+                      height: 60,
                       child: ElevatedButton(
                         onPressed: state is AuthLoading
                             ? null
@@ -186,21 +116,19 @@ class _SignupScreenState extends State<SignupScreen> {
                                           fullName: _nameController.text.trim(),
                                           role: _role,
                                           phone: _phoneController.text.isNotEmpty ? _phoneController.text.trim() : null,
-                                          occupation: _role == 'helper' ? _selectedOccupation : null,
-                                          state: _stateController.text.isNotEmpty ? _stateController.text.trim() : null,
                                         ),
                                       );
                                 }
                               },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: neonCyan,
-                          foregroundColor: darkBg,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                           elevation: 0,
                         ),
                         child: state is AuthLoading
-                            ? const CircularProgressIndicator(color: darkBg)
-                            : const Text('INITIALIZE PROFILE', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2)),
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text('CREATE ACCOUNT', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
                       ),
                     );
                   },
@@ -224,20 +152,27 @@ class _SignupScreenState extends State<SignupScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: neonCyan, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-        const SizedBox(height: 8),
+        Text(
+          label,
+          style: const TextStyle(color: Color(0xFF1E293B), fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+        ),
+        const SizedBox(height: 10),
         Container(
-          decoration: BoxDecoration(color: slatePanel, borderRadius: BorderRadius.circular(16), border: Border.all(color: glassBorder)),
+          decoration: BoxDecoration(
+            color: Colors.white, 
+            borderRadius: BorderRadius.circular(16), 
+            border: Border.all(color: glassBorder, width: 1.5)
+          ),
           child: TextFormField(
             controller: controller,
             obscureText: obscureText,
             keyboardType: keyboardType,
-            style: const TextStyle(color: Colors.white, fontSize: 15),
+            style: const TextStyle(color: Color(0xFF1E293B), fontSize: 15, fontWeight: FontWeight.w600),
             validator: validator,
             decoration: InputDecoration(
-              prefixIcon: Icon(icon, color: Colors.blueGrey, size: 20),
+              prefixIcon: Icon(icon, color: Colors.blueGrey.shade300, size: 20),
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             ),
           ),
         ),

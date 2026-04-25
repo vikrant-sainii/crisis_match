@@ -132,7 +132,16 @@ class _HelperGridMapState extends State<HelperGridMap> {
   Widget _buildMapFilter(List<String> occupations) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: const Color(0xFF1E293B),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
       child: Row(
         children: [
           const Text(
@@ -184,10 +193,13 @@ class _HelperGridMapState extends State<HelperGridMap> {
                 context.read<AdminBloc>().add(FilterHelpersByOccupation(value));
               }
             },
-            selectedColor: const Color(0xFF22D3EE),
-            backgroundColor: const Color(0xFF334155),
+            selectedColor: Theme.of(context).primaryColor,
+            backgroundColor: Colors.white,
+            side: BorderSide(
+              color: isSelected ? Theme.of(context).primaryColor : Colors.grey.shade300,
+            ),
             labelStyle: TextStyle(
-              color: isSelected ? Colors.black : Colors.white,
+              color: isSelected ? Colors.white : Colors.black87,
             ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),

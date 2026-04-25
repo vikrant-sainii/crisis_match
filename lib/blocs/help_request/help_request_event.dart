@@ -86,12 +86,23 @@ class UpdateHelpRequestStatus extends HelpRequestEvent {
 class RequestUpdated extends HelpRequestEvent {
   final HelpRequestModel request;
   final String? matchedId; // Optional metadata for n8n pointers
-  final String? distance;  // Optional metadata
+  final String? distance; // Optional metadata
 
   const RequestUpdated(this.request, {this.matchedId, this.distance});
 
   @override
   List<Object?> get props => [request, matchedId, distance];
+}
+
+/// Periodic event to trigger priority re-calculation for helpers
+class SortRequestsByPriority extends HelpRequestEvent {
+  final double helperLat;
+  final double helperLng;
+
+  const SortRequestsByPriority({required this.helperLat, required this.helperLng});
+
+  @override
+  List<Object?> get props => [helperLat, helperLng];
 }
 
 class HelperMatchesUpdated extends HelpRequestEvent {

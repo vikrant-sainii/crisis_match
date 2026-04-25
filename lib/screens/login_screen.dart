@@ -17,11 +17,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  // 🌃 CYBER-DARK THEME CONSTANTS
-  static const Color darkBg = Color(0xFF0F172A);
-  static const Color slatePanel = Color(0xFF1E293B);
-  static const Color neonCyan = Color(0xFF22D3EE);
-  static const Color glassBorder = Color(0x3394A3B8);
+  // 🏙 SOFT UI THEME CONSTANTS
+  static const Color darkBg = Color(0xFFF8FAFC);
+  static const Color neonCyan = Color(0xFF2563EB); // Trust Blue
+  static const Color glassBorder = Color(0xFFE2E8F0);
 
   @override
   void dispose() {
@@ -70,7 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 20),
                     Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                      decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
                       child: const Text(
                         'This protocol is enforced to maintain the integrity of the CrisisMatch network.',
                         style: TextStyle(color: Colors.redAccent, fontSize: 11, fontStyle: FontStyle.italic),
@@ -92,151 +91,133 @@ class _LoginScreenState extends State<LoginScreen> {
             );
           }
         },
-        child: Stack(
-          children: [
-            // 💠 CARBON FIBER BACKGROUND
-            Positioned.fill(
-              child: Opacity(
-                opacity: 0.03,
-                child: Image.network(
-                  'https://www.transparenttextures.com/patterns/carbon-fibre.png',
-                  repeat: ImageRepeat.repeat,
-                ),
-              ),
-            ),
-            
-            Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(32.0),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // 🛰 COMMAND PORTAL LOGO
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: neonCyan.withOpacity(0.2), width: 2),
-                          boxShadow: [BoxShadow(color: neonCyan.withOpacity(0.1), blurRadius: 40, spreadRadius: 5)],
-                        ),
-                        child: const Icon(Icons.crisis_alert_rounded, size: 64, color: neonCyan),
-                      ),
-                      const SizedBox(height: 24),
-                      const Text(
-                        'CRISISMATCH',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 6,
-                        ),
-                      ),
-                      Text(
-                        'COMMAND INTERFACE v1.0',
-                        style: TextStyle(
-                          color: neonCyan.withOpacity(0.7),
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                      const SizedBox(height: 56),
-
-                      // 📟 AUTHENTICATION INPUTS
-                      _buildCyberTextField(
-                        controller: _emailController,
-                        label: 'IDENTIFICATION (EMAIL)',
-                        icon: Icons.alternate_email_rounded,
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (v) => v == null || v.isEmpty ? 'REQUIRED' : null,
-                      ),
-                      const SizedBox(height: 20),
-                      _buildCyberTextField(
-                        controller: _passwordController,
-                        label: 'ACCESS CODE (PASSWORD)',
-                        icon: Icons.vpn_key_rounded,
-                        obscureText: true,
-                        validator: (v) => v == null || v.isEmpty ? 'REQUIRED' : null,
-                      ),
-                      const SizedBox(height: 40),
-
-                      // ⚡ AUTHORIZE ACCESS BUTTON
-                      BlocBuilder<AuthBloc, AuthState>(
-                        builder: (context, state) {
-                          return Container(
-                            width: double.infinity,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              boxShadow: [
-                                BoxShadow(
-                                  color: neonCyan.withOpacity(0.2),
-                                  blurRadius: 20,
-                                  spreadRadius: 2,
-                                ),
-                              ],
-                            ),
-                            child: ElevatedButton(
-                              onPressed: state is AuthLoading
-                                  ? null
-                                  : () {
-                                      if (_formKey.currentState!.validate()) {
-                                        context.read<AuthBloc>().add(
-                                              AuthSignInRequested(
-                                                email: _emailController.text.trim(),
-                                                password:_passwordController.text.trim(),
-                                              ),
-                                            );
-                                      }
-                                    },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: neonCyan,
-                                foregroundColor: darkBg,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: state is AuthLoading
-                                  ? const CircularProgressIndicator(color: darkBg)
-                                  : const Text(
-                                      'AUTHORIZE ACCESS',
-                                      style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2),
-                                    ),
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 32),
-
-                      // 🔗 JOIN THE GRID
-                      TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const SignupScreen()),
-                          );
-                        },
-                        child: RichText(
-                          text: TextSpan(
-                            style: TextStyle(color: Colors.blueGrey.shade400, fontSize: 12, letterSpacing: 1),
-                            children: const [
-                              TextSpan(text: "NEW OPERATIVE? "),
-                              TextSpan(
-                                text: "JOIN THE GRID",
-                                style: TextStyle(color: neonCyan, fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 32.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // 🛰 PREMIUM LOGO
+                  Container(
+                    padding: const EdgeInsets.all(28),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: neonCyan.withValues(alpha: 0.1),
+                          blurRadius: 40,
+                          offset: const Offset(0, 10),
+                        )
+                      ],
+                    ),
+                    child: const Icon(Icons.crisis_alert_rounded, size: 64, color: Colors.red),
                   ),
-                ),
+                  const SizedBox(height: 32),
+                  const Text(
+                    'SAHAYAK SETU',
+                    style: TextStyle(
+                      color: Color(0xFF1E293B),
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -1,
+                    ),
+                  ),
+                  const Text(
+                    'EMERGENCY RESPONSE NETWORK',
+                    style: TextStyle(
+                      color: Colors.blueGrey,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 56),
+
+                  // 📟 AUTHENTICATION INPUTS
+                  _buildCyberTextField(
+                    controller: _emailController,
+                    label: 'EMAIL ADDRESS',
+                    icon: Icons.alternate_email_rounded,
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (v) => v == null || v.isEmpty ? 'Email is required' : null,
+                  ),
+                  const SizedBox(height: 24),
+                  _buildCyberTextField(
+                    controller: _passwordController,
+                    label: 'PASSWORD',
+                    icon: Icons.vpn_key_rounded,
+                    obscureText: true,
+                    validator: (v) => v == null || v.isEmpty ? 'Password is required' : null,
+                  ),
+                  const SizedBox(height: 40),
+
+                  // ⚡ LOGIN BUTTON
+                  BlocBuilder<AuthBloc, AuthState>(
+                    builder: (context, state) {
+                      return SizedBox(
+                        width: double.infinity,
+                        height: 60,
+                        child: ElevatedButton(
+                          onPressed: state is AuthLoading
+                              ? null
+                              : () {
+                                  if (_formKey.currentState!.validate()) {
+                                    context.read<AuthBloc>().add(
+                                          AuthSignInRequested(
+                                            email: _emailController.text.trim(),
+                                            password:_passwordController.text.trim(),
+                                          ),
+                                        );
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: neonCyan,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: state is AuthLoading
+                              ? const CircularProgressIndicator(color: Colors.white)
+                              : const Text(
+                                  'LOG IN',
+                                  style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
+                                ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 32),
+
+                  // 🔗 JOIN THE GRID
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SignupScreen()),
+                      );
+                    },
+                    child: RichText(
+                      text: const TextSpan(
+                        style: TextStyle(color: Colors.blueGrey, fontSize: 13),
+                        children: [
+                          TextSpan(text: "New here? "),
+                          TextSpan(
+                            text: "Create an account",
+                            style: TextStyle(color: neonCyan, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -255,25 +236,32 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         Text(
           label,
-          style: const TextStyle(color: neonCyan, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+          style: const TextStyle(color: Color(0xFF1E293B), fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
-            color: slatePanel,
+            color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: glassBorder),
+            border: Border.all(color: glassBorder, width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              )
+            ],
           ),
           child: TextFormField(
             controller: controller,
             obscureText: obscureText,
             keyboardType: keyboardType,
-            style: const TextStyle(color: Colors.white, fontSize: 15),
+            style: const TextStyle(color: Color(0xFF1E293B), fontSize: 15, fontWeight: FontWeight.w600),
             validator: validator,
             decoration: InputDecoration(
-              prefixIcon: Icon(icon, color: Colors.blueGrey, size: 20),
+              prefixIcon: Icon(icon, color: Colors.blueGrey.shade300, size: 20),
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             ),
           ),
         ),

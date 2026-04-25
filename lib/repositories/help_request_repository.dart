@@ -24,10 +24,14 @@ class HelpRequestRepository {
         .maybeSingle();
 
     if (data == null) return null;
-    
+
     if (data['helpers'] != null && data['helpers']['profile_id'] != null) {
       final profileId = data['helpers']['profile_id'] as String;
-      final profile = await _client.from('profiles').select('full_name, phone').eq('id', profileId).maybeSingle();
+      final profile = await _client
+          .from('profiles')
+          .select('full_name, phone')
+          .eq('id', profileId)
+          .maybeSingle();
       if (profile != null) {
         data['helper_name'] = profile['full_name'];
         data['helper_phone'] = profile['phone'];
@@ -35,8 +39,11 @@ class HelpRequestRepository {
     }
 
     // Calculate distance locally since we rely on the DB stream, not the HTTP response
-    if (data['victim_curr_lat'] != null && data['victim_curr_long'] != null &&
-        data['helpers'] != null && data['helpers']['lat'] != null && data['helpers']['lng'] != null) {
+    if (data['victim_curr_lat'] != null &&
+        data['victim_curr_long'] != null &&
+        data['helpers'] != null &&
+        data['helpers']['lat'] != null &&
+        data['helpers']['lng'] != null) {
       double lat1 = (data['victim_curr_lat'] as num).toDouble();
       double lon1 = (data['victim_curr_long'] as num).toDouble();
       double lat2 = (data['helpers']['lat'] as num).toDouble();
@@ -44,9 +51,10 @@ class HelpRequestRepository {
 
       var p = 0.017453292519943295;
       var c = cos;
-      var a = 0.5 - c((lat2 - lat1) * p) / 2 +
-          c(lat1 * p) * c(lat2 * p) *
-              (1 - c((lon2 - lon1) * p)) / 2;
+      var a =
+          0.5 -
+          c((lat2 - lat1) * p) / 2 +
+          c(lat1 * p) * c(lat2 * p) * (1 - c((lon2 - lon1) * p)) / 2;
       double distanceKm = 12742 * asin(sqrt(a)); // 2 * R; R = 6371 km
       data['distance'] = '${distanceKm.toStringAsFixed(1)} KM AWAY';
     }
@@ -67,11 +75,15 @@ class HelpRequestRepository {
         .order('created_at', ascending: false)
         .limit(1)
         .maybeSingle();
-    
+
     if (data == null) return null;
-    
+
     if (data['helper_id'] != null) {
-      final profile = await _client.from('profiles').select('full_name, phone').eq('id', data['helper_id']).maybeSingle();
+      final profile = await _client
+          .from('profiles')
+          .select('full_name, phone')
+          .eq('id', data['helper_id'])
+          .maybeSingle();
       if (profile != null) {
         data['helper_name'] = profile['full_name'];
         data['helper_phone'] = profile['phone'];
@@ -88,9 +100,10 @@ class HelpRequestRepository {
 
   /// Update request status
   Future<void> updateStatus(String requestId, String status) async {
-    await _client.from('request_table').update({
-      'status': status,
-    }).eq('request_id', requestId);
+    await _client
+        .from('request_table')
+        .update({'status': status})
+        .eq('request_id', requestId);
   }
 
   /// Fetch ALL requests assigned to a specific helper (pending, accepted, rejected, completed)
@@ -104,7 +117,7 @@ class HelpRequestRepository {
         ''')
         .eq('helper_id', helperId)
         .order('created_at', ascending: false);
-        
+
     final results = data as List;
     for (var row in results) {
       if (row['profiles'] != null) {
@@ -113,7 +126,11 @@ class HelpRequestRepository {
       // Also fetch helper name for consistency
       if (row['helpers'] != null && row['helpers']['profile_id'] != null) {
         final profileId = row['helpers']['profile_id'] as String;
-        final profile = await _client.from('profiles').select('full_name, phone').eq('id', profileId).maybeSingle();
+        final profile = await _client
+            .from('profiles')
+            .select('full_name, phone')
+            .eq('id', profileId)
+            .maybeSingle();
         if (profile != null) {
           row['helper_name'] = profile['full_name'];
           row['helper_phone'] = profile['phone'];
@@ -133,12 +150,16 @@ class HelpRequestRepository {
         ''')
         .eq('victim_id', victimId)
         .order('created_at', ascending: false);
-        
+
     final results = data as List;
     for (var row in results) {
       if (row['helpers'] != null && row['helpers']['profile_id'] != null) {
         final profileId = row['helpers']['profile_id'] as String;
-        final profile = await _client.from('profiles').select('full_name, phone').eq('id', profileId).maybeSingle();
+        final profile = await _client
+            .from('profiles')
+            .select('full_name, phone')
+            .eq('id', profileId)
+            .maybeSingle();
         if (profile != null) {
           row['helper_name'] = profile['full_name'];
           row['helper_phone'] = profile['phone'];
@@ -176,26 +197,38 @@ class HelpRequestRepository {
         .listen((data) async {
           if (data.isNotEmpty) {
             // Priority 1: Find any 'pending' or 'accepted' requests
-            final activeRequests = data.where((r) => 
-              r['status'] == 'pending' || r['status'] == 'accepted'
-            ).toList();
+            final activeRequests = data
+                .where(
+                  (r) => r['status'] == 'pending' || r['status'] == 'accepted',
+                )
+                .toList();
 
             Map<String, dynamic> newest;
             if (activeRequests.isNotEmpty) {
               // If active missions exist, pick the newest one among them
-              activeRequests.sort((a, b) => (DateTime.tryParse(b['created_at']) ?? DateTime(0))
-                  .compareTo(DateTime.tryParse(a['created_at']) ?? DateTime(0)));
+              activeRequests.sort(
+                (a, b) => (DateTime.tryParse(b['created_at']) ?? DateTime(0))
+                    .compareTo(
+                      DateTime.tryParse(a['created_at']) ?? DateTime(0),
+                    ),
+              );
               newest = activeRequests.first;
             } else {
               // Otherwise pick the newest rejection/completion
-              data.sort((a, b) => (DateTime.tryParse(b['created_at']) ?? DateTime(0))
-                  .compareTo(DateTime.tryParse(a['created_at']) ?? DateTime(0)));
+              data.sort(
+                (a, b) => (DateTime.tryParse(b['created_at']) ?? DateTime(0))
+                    .compareTo(
+                      DateTime.tryParse(a['created_at']) ?? DateTime(0),
+                    ),
+              );
               newest = data.first;
             }
 
             final newestReqId = newest['request_id'];
-            developer.log('HelpRequestRepo: Stream update. Newest ID: $newestReqId, Status: ${newest['status']}');
-            
+            developer.log(
+              'HelpRequestRepo: Stream update. Newest ID: $newestReqId, Status: ${newest['status']}',
+            );
+
             final fullReq = await _fetchJoinedRequest(newestReqId);
             if (fullReq != null) {
               onUpdate(fullReq);
@@ -206,20 +239,55 @@ class HelpRequestRepository {
 
   /// Update victim's live location on the request
   Future<void> updateVictimLocation(
-      String requestId, double lat, double lng) async {
-    await _client.from('request_table').update({
-      'victim_curr_lat': lat,
-      'victim_curr_long': lng,
-    }).eq('request_id', requestId);
+    String requestId,
+    double lat,
+    double lng,
+  ) async {
+    await _client
+        .from('request_table')
+        .update({'victim_curr_lat': lat, 'victim_curr_long': lng})
+        .eq('request_id', requestId);
   }
 
   /// Update helper's mission-specific live location on the request
   Future<void> updateHelperLocation(
-      String requestId, double lat, double lng) async {
-    await _client.from('request_table').update({
-      'helper_curr_lat': lat,
-      'helper_curr_long': lng,
-    }).eq('request_id', requestId);
+    String requestId,
+    double lat,
+    double lng,
+  ) async {
+    await _client
+        .from('request_table')
+        .update({'helper_curr_lat': lat, 'helper_curr_long': lng})
+        .eq('request_id', requestId);
+  }
+
+  /// Dedicated trigger for Women Safety SOS
+  Future<Map<String, dynamic>> triggerWomenSafetySos({
+    required String victimId,
+    required double lat,
+    required double lng,
+  }) async {
+    final url = SupabaseConfig.womensafeturl;
+    developer.log('HelpReqRepo: Triggering Women Safety SOS at $url');
+
+    final response = await http
+        .post(
+          Uri.parse(url),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'message': 'women safety sos',
+            'victim_id': victimId,
+            'lat': lat,
+            'lng': lng,
+          }),
+        )
+        .timeout(const Duration(seconds: 60));
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (response.body.trim().isEmpty) return {'reply': 'SOS Received.'};
+      return jsonDecode(response.body);
+    }
+    throw Exception('Women Safety SOS failed: ${response.statusCode}');
   }
 
   /// Trigger n8n webhook to initially find helpers
@@ -231,30 +299,45 @@ class HelpRequestRepository {
   }) async {
     final url = SupabaseConfig.n8nWebhookUrl;
     developer.log('HelpReqRepo: Triggering n8n search at $url');
-    
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'message': message,
-        'victim_id': victimId,
-        'lat': lat,
-        'lng': lng,
-      }),
-    ).timeout(const Duration(seconds: 60));
 
-    developer.log('HelpReqRepo: n8n Matcher response status: ${response.statusCode}');
+    final response = await http
+        .post(
+          Uri.parse(url),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'message': message,
+            'victim_id': victimId,
+            'lat': lat,
+            'lng': lng,
+          }),
+        )
+        .timeout(const Duration(seconds: 60));
+
+    developer.log(
+      'HelpReqRepo: n8n Matcher response status: ${response.statusCode}',
+    );
     developer.log('HelpReqRepo: n8n Matcher response body: ${response.body}');
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (response.body.trim().isEmpty) {
+        developer.log('HelpReqRepo: n8n returned empty success response.');
+        return {'reply': 'Alert received by Sahayak Core.'};
+      }
+
       developer.log('HelpReqRepo: Parsing n8n response...');
-      dynamic currentBody = jsonDecode(response.body);
-      
+      dynamic currentBody;
+      try {
+        currentBody = jsonDecode(response.body);
+      } catch (e) {
+        developer.log('HelpReqRepo: Failed to decode JSON: $e');
+        return {'reply': response.body};
+      }
+
       // Helper function to extract a potential Map from common n8n wrappers
       Map<String, dynamic>? extractData(dynamic obj) {
         if (obj is List && obj.isNotEmpty) return extractData(obj[0]);
         if (obj is Map) return obj as Map<String, dynamic>;
-        
+
         // If it's a string, it might be double-encoded JSON
         if (obj is String && (obj.startsWith('{') || obj.startsWith('['))) {
           try {
@@ -273,18 +356,27 @@ class HelpRequestRepository {
 
       // 1. Success: matching flow
       if (data.containsKey('matched_id') && data.containsKey('request_id')) {
-        return data; 
+        return data;
       }
 
       // 2. Search for common reply/message keys
-      for (final key in ['reply', 'message', 'assistant_message', 'output', 'text', 'response', 'answer']) {
+      for (final key in [
+        'reply',
+        'message',
+        'assistant_message',
+        'output',
+        'text',
+        'response',
+        'answer',
+      ]) {
         if (data!.containsKey(key)) {
           final val = data[key]!;
           final inner = extractData(val);
-          if (inner != null && (inner.containsKey('reply') || inner.containsKey('message'))) {
-             data = inner;
+          if (inner != null &&
+              (inner.containsKey('reply') || inner.containsKey('message'))) {
+            data = inner;
           } else {
-             return {'reply': val.toString()};
+            return {'reply': val.toString()};
           }
         }
       }
@@ -293,7 +385,10 @@ class HelpRequestRepository {
       // This handles the weird n8n case where the message is split across keys/values.
       String collectAllText(dynamic obj) {
         if (obj is Map) {
-          return obj.entries.map((e) => "${e.key} ${collectAllText(e.value)}").join(" ").trim();
+          return obj.entries
+              .map((e) => "${e.key} ${collectAllText(e.value)}")
+              .join(" ")
+              .trim();
         } else if (obj is List) {
           return obj.map((e) => collectAllText(e)).join(" ").trim();
         } else {
@@ -305,10 +400,10 @@ class HelpRequestRepository {
       if (allText.isNotEmpty) {
         // Clean up internal JSON-like fragments if they were gathered from keys
         final cleanedText = allText
-          .replaceAll(RegExp(r'[\{\}\[\]"\\n\r]'), ' ')
-          .replaceAll(RegExp(r'\s+'), ' ')
-          .trim();
-        
+            .replaceAll(RegExp(r'[\{\}\[\]"\\n\r]'), ' ')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+
         // Remove common internal key names if they appear at the start
         String finalOutput = cleanedText;
         for (final k in ['reply', 'message', 'output']) {
@@ -338,18 +433,22 @@ class HelpRequestRepository {
     final url = SupabaseConfig.n8nAssistWebhookUrl;
     developer.log('HelpReqRepo: Triggering n8n assist at $url');
 
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'message': message,
-        'victim_id': victimId,
-        'lat': lat,
-        'lng': lng,
-      }),
-    ).timeout(const Duration(seconds: 60));
+    final response = await http
+        .post(
+          Uri.parse(url),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'message': message,
+            'victim_id': victimId,
+            'lat': lat,
+            'lng': lng,
+          }),
+        )
+        .timeout(const Duration(seconds: 60));
 
-    developer.log('HelpReqRepo: n8n Assist response status: ${response.statusCode}');
+    developer.log(
+      'HelpReqRepo: n8n Assist response status: ${response.statusCode}',
+    );
     developer.log('HelpReqRepo: n8n Assist response body: ${response.body}');
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -359,12 +458,14 @@ class HelpRequestRepository {
 
       try {
         dynamic body = jsonDecode(response.body);
-        
+
         Map<String, dynamic>? extractData(dynamic obj) {
           if (obj is List && obj.isNotEmpty) return extractData(obj[0]);
           if (obj is Map) return obj as Map<String, dynamic>;
           if (obj is String && (obj.startsWith('{') || obj.startsWith('['))) {
-            try { return extractData(jsonDecode(obj)); } catch (_) {}
+            try {
+              return extractData(jsonDecode(obj));
+            } catch (_) {}
           }
           return null;
         }
@@ -373,7 +474,15 @@ class HelpRequestRepository {
         if (data == null) return {'reply': body.toString()};
 
         // Check common keys
-        for (final key in ['reply', 'message', 'assistant_message', 'output', 'text', 'response', 'answer']) {
+        for (final key in [
+          'reply',
+          'message',
+          'assistant_message',
+          'output',
+          'text',
+          'response',
+          'answer',
+        ]) {
           if (data.containsKey(key)) {
             return {'reply': data[key].toString()};
           }
@@ -387,8 +496,6 @@ class HelpRequestRepository {
       throw Exception('Assist workflow failed (${response.statusCode})');
     }
   }
-
-
 
   /// Calls the n8n Voice Assistant webhook.
   ///
@@ -408,26 +515,36 @@ class HelpRequestRepository {
   }) async {
     final url = SupabaseConfig.n8nVoiceAssistUrl;
     developer.log('HelpReqRepo: Calling Voice Assist for $victimId');
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'message': message,
-        'victim_id': victimId,
-        'lat': lat,
-        'lng': lng,
-      }),
-    ).timeout(const Duration(seconds: 60));
+    final response = await http
+        .post(
+          Uri.parse(url),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'message': message,
+            'victim_id': victimId,
+            'lat': lat,
+            'lng': lng,
+          }),
+        )
+        .timeout(const Duration(seconds: 60));
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (response.body.trim().isEmpty) {
+        return {
+          'reply': 'Voice transmission received.',
+          'audioPath': null,
+        };
+      }
       try {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
 
         // Extract text — try common key names n8n might use
-        final String? assistantText = (data['assistant_message'] ??
-            data['message'] ??
-            data['reply'] ??
-            data['text'])?.toString();
+        final String? assistantText =
+            (data['assistant_message'] ??
+                    data['message'] ??
+                    data['reply'] ??
+                    data['text'])
+                ?.toString();
 
         // Extract and concatenate audio from the audio_urls array
         // n8n splits long responses into multiple Google TTS chunks → we join them
@@ -445,7 +562,9 @@ class HelpRequestRepository {
               if (audioResponse.statusCode == 200) {
                 combinedBytes.addAll(audioResponse.bodyBytes);
               } else {
-                developer.log('HelpReqRepo: Skipped audio URL (${audioResponse.statusCode}): $audioUrl');
+                developer.log(
+                  'HelpReqRepo: Skipped audio URL (${audioResponse.statusCode}): $audioUrl',
+                );
               }
             }
             if (combinedBytes.isNotEmpty) {
@@ -480,13 +599,17 @@ class HelpRequestRepository {
   ///   Format B (map):        { "audio_urls": ["<url1>", "<url2>", ...] }
   Future<String?> triggerTTS(String text) async {
     try {
-      final response = await http.post(
-        Uri.parse(SupabaseConfig.n8nTtsUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'message': text}),
-      ).timeout(const Duration(seconds: 60));
+      final response = await http
+          .post(
+            Uri.parse(SupabaseConfig.n8nTtsUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'message': text}),
+          )
+          .timeout(const Duration(seconds: 60));
 
-      developer.log('HelpReqRepo: TTS status=${response.statusCode} body=${response.body.substring(0, response.body.length.clamp(0, 200))}');
+      developer.log(
+        'HelpReqRepo: TTS status=${response.statusCode} body=${response.body.substring(0, response.body.length.clamp(0, 200))}',
+      );
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
         developer.log('HelpReqRepo: TTS failed (${response.statusCode})');
@@ -500,7 +623,8 @@ class HelpRequestRepository {
       if (decoded is List) {
         urls = decoded; // Format A: ["url1", "url2"]
       } else if (decoded is Map && decoded['audio_urls'] is List) {
-        urls = decoded['audio_urls'] as List; // Format B: { "audio_urls": [...] }
+        urls =
+            decoded['audio_urls'] as List; // Format B: { "audio_urls": [...] }
       }
 
       if (urls.isEmpty) {
@@ -518,7 +642,9 @@ class HelpRequestRepository {
         if (audioResponse.statusCode == 200) {
           combinedBytes.addAll(audioResponse.bodyBytes);
         } else {
-          developer.log('HelpReqRepo: TTS skipped URL (${audioResponse.statusCode}): $audioUrl');
+          developer.log(
+            'HelpReqRepo: TTS skipped URL (${audioResponse.statusCode}): $audioUrl',
+          );
         }
       }
 
@@ -545,7 +671,6 @@ class HelpRequestRepository {
     return file.path;
   }
 
-
   /// Trigger n8n webhook to log events to the Polygon blockchain
   Future<void> triggerBlockchainLog({
     required String requestId,
@@ -555,16 +680,20 @@ class HelpRequestRepository {
       final url = SupabaseConfig.n8nBlockchainWebhookUrl;
       developer.log('HelpReqRepo: Triggering blockchain log for $requestId');
 
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'request_id': requestId,
-          'data_to_hash': dataToHash,
-        }),
-      ).timeout(const Duration(seconds: 15));
+      final response = await http
+          .post(
+            Uri.parse(url),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'request_id': requestId,
+              'data_to_hash': dataToHash,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
 
-      developer.log('HelpReqRepo: Blockchain webhook response: ${response.statusCode}');
+      developer.log(
+        'HelpReqRepo: Blockchain webhook response: ${response.statusCode}',
+      );
     } catch (e) {
       developer.log('HelpReqRepo: Failed to trigger blockchain webhook: $e');
     }
@@ -627,7 +756,11 @@ class HelpRequestRepository {
       }
       if (row['helpers'] != null && row['helpers']['profile_id'] != null) {
         final profileId = row['helpers']['profile_id'] as String;
-        final profile = await _client.from('profiles').select('full_name, phone').eq('id', profileId).maybeSingle();
+        final profile = await _client
+            .from('profiles')
+            .select('full_name, phone')
+            .eq('id', profileId)
+            .maybeSingle();
         if (profile != null) {
           row['helper_name'] = profile['full_name'];
           row['helper_phone'] = profile['phone'];

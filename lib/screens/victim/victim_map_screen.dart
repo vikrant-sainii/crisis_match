@@ -265,6 +265,7 @@ class _VictimMapScreenState extends State<VictimMapScreen> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.1),

@@ -29,10 +29,11 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
   final _scrollController = ScrollController();
   String _victimName = 'Victim';
 
-  // 🌃 CYBER-DARK THEME CONSTANTS
-  static const Color darkBg = Color(0xFF0F172A);
-  static const Color slatePanel = Color(0xFF1E293B);
-  static const Color neonCyan = Color(0xFF22D3EE);
+  // 🏙 SOFT UI THEME CONSTANTS
+  static const Color darkBg = Color(0xFFF8FAFC);
+  static const Color slatePanel = Colors.white;
+  static const Color neonCyan = Color(0xFF2563EB); // Trust Blue
+  static const Color glassBorder = Color(0xFFE2E8F0);
 
   @override
   void initState() {
@@ -113,12 +114,13 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
               Expanded(
                 child: Stack(
                   children: [
-                    Positioned.fill(
+                    Center(
                       child: Opacity(
                         opacity: 0.05,
-                        child: Image.network(
-                          'https://www.transparenttextures.com/patterns/carbon-fibre.png',
-                          repeat: ImageRepeat.repeat,
+                        child: Icon(
+                          Icons.support_agent_rounded,
+                          size: MediaQuery.of(context).size.width * 0.6,
+                          color: neonCyan,
                         ),
                       ),
                     ),
@@ -136,7 +138,7 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.all(24),
-                                    decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: neonCyan.withOpacity(0.1), width: 2)),
+                                    decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: neonCyan.withValues(alpha: 0.1), width: 2)),
                                     child: const Icon(Icons.wifi_tethering_rounded, size: 48, color: neonCyan),
                                   ),
                                   const SizedBox(height: 16),
@@ -184,11 +186,12 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
 
   Widget _buildCyberChatHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: Colors.white,
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.blueGrey, size: 20),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF1E293B), size: 20),
             onPressed: () => Navigator.pop(context),
           ),
           const SizedBox(width: 8),
@@ -198,18 +201,24 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
               children: [
                 Text(
                   _victimName.toUpperCase(),
-                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1),
+                  style: const TextStyle(color: Color(0xFF1E293B), fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                 ),
                 Text(
-                  'ENCRYPTED MISSION PATH',
-                  style: TextStyle(color: neonCyan.withOpacity(0.7), fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1),
+                  'SECURE RESPONSE CHANNEL',
+                  style: TextStyle(color: Colors.blueGrey.shade400, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1),
                 ),
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.radar_rounded, color: neonCyan),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HelperMapScreen(request: widget.request))),
+          Container(
+            decoration: BoxDecoration(
+              color: neonCyan.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.radar_rounded, color: neonCyan),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HelperMapScreen(request: widget.request))),
+            ),
           ),
         ],
       ),
@@ -222,29 +231,35 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
         bool isResolved = false;
         if (state is HelpRequestActive && state.request.status == 'completed') isResolved = true;
 
-        final color = isResolved ? Colors.greenAccent : neonCyan;
+        final color = isResolved ? const Color(0xFF10B981) : neonCyan;
         return Container(
           width: double.infinity,
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.2)),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+              ),
+            ],
           ),
           child: Row(
             children: [
-              Icon(isResolved ? Icons.verified_rounded : Icons.bolt_rounded, color: color, size: 16),
-              const SizedBox(width: 8),
-              Text(
-                isResolved ? 'MISSION ACCOMPLISHED' : 'DEPLOYMENT ACTIVE: ${widget.request.crisisType.toUpperCase()}',
-                style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+              Icon(isResolved ? Icons.verified_rounded : Icons.bolt_rounded, color: color, size: 18),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  isResolved ? 'MISSION ACCOMPLISHED' : 'DEPLOYMENT ACTIVE: ${widget.request.crisisType.toUpperCase()}',
+                  style: TextStyle(color: Color(0xFF1E293B), fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                ),
               ),
-              const Spacer(),
               if (!isResolved)
-                GestureDetector(
-                  onTap: () => _showResolveDialog(),
-                  child: const Text('FINALIZE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, decoration: TextDecoration.underline)),
+                TextButton(
+                  onPressed: () => _showResolveDialog(),
+                  child: const Text('FINALIZE', style: TextStyle(color: neonCyan, fontSize: 11, fontWeight: FontWeight.w900)),
                 ),
             ],
           ),
@@ -291,25 +306,23 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
         return Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
           decoration: BoxDecoration(
-            color: darkBg,
-            boxShadow: [BoxShadow(color: neonCyan.withOpacity(0.05), blurRadius: 40, offset: const Offset(0, -10))],
+            color: Colors.white,
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, -5))],
           ),
           child: Row(
             children: [
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: slatePanel,
+                    color: const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: neonCyan.withOpacity(0.3)),
-                    boxShadow: [BoxShadow(color: neonCyan.withOpacity(0.05), blurRadius: 15, spreadRadius: 2)],
                   ),
                   child: TextField(
                     controller: _messageController,
-                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                    style: const TextStyle(color: Color(0xFF1E293B), fontSize: 15),
                     decoration: InputDecoration(
-                      hintText: 'TRANSMIT MESSAGE...',
-                      hintStyle: TextStyle(color: Colors.blueGrey.shade600, letterSpacing: 1, fontSize: 13),
+                      hintText: 'Type your message...',
+                      hintStyle: TextStyle(color: Colors.blueGrey.shade400, fontSize: 14),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                     ),
@@ -325,9 +338,9 @@ class _HelperChatScreenState extends State<HelperChatScreen> {
                   decoration: BoxDecoration(
                     color: neonCyan,
                     shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: neonCyan.withOpacity(0.4), blurRadius: 15, spreadRadius: 2)],
+                    boxShadow: [BoxShadow(color: neonCyan.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))],
                   ),
-                  child: const Icon(Icons.arrow_upward_rounded, color: darkBg, size: 24),
+                  child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
                 ),
               ),
             ],

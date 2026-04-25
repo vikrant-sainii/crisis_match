@@ -41,6 +41,8 @@
 	<string>CrisisMatch needs microphone access to transcribe your emergency voice reports.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>CrisisMatch uses speech recognition to help you report emergencies faster via voice.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>CrisisMatch requires contact access to help you quickly select your emergency contacts.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

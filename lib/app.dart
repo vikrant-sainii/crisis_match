@@ -12,6 +12,7 @@ import 'blocs/connectivity/connectivity_bloc.dart';
 import 'blocs/connectivity/connectivity_state.dart';
 import 'repositories/low_network_repository.dart';
 import 'widgets/connectivity_visualizer.dart';
+import 'theme/app_theme.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -21,10 +22,7 @@ class App extends StatelessWidget {
     return MaterialApp(
       title: 'CrisisMatch',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.red),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.lightTheme,
       home: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthAuthenticated) {
@@ -46,8 +44,8 @@ class App extends StatelessWidget {
                   // 2. Initial State (Show Loading)
                   if (authState is AuthInitial || connState is ConnectivityInitial) {
                     return const Scaffold(
-                      backgroundColor: Color(0xFF0F172A),
-                      body: Center(child: CircularProgressIndicator(color: Color(0xFF22D3EE))),
+                      backgroundColor: Color.fromARGB(255, 255, 255, 255),
+                      body: Center(child: CircularProgressIndicator(color: Color.fromARGB(255, 44, 73, 238))),
                     );
                   }
 

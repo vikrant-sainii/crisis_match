@@ -20,7 +20,7 @@ class SosSensorService : Service() {
         private const val SHAKE_THRESHOLD_GRAVITY = 2.7f
         private const val SHAKE_SLOP_TIME_MS = 500L
         private const val SHAKE_COUNT_RESET_TIME_MS = 3000L
-        private const val REQUIRED_SHAKES = 4
+        private const val REQUIRED_SHAKES = 3
     }
 
     private lateinit var sensorManager: SensorManager

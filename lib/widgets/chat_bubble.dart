@@ -21,9 +21,7 @@ class ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color neonCyan = Color(0xFF22D3EE);
-    const Color darkBg = Color(0xFF0F172A);
-    const Color slatePanel = Color(0xFF1E293B);
+    const Color neonCyan = Color(0xFF2563EB); // Trust Blue
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -41,9 +39,9 @@ class ChatBubble extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 9,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
+                  letterSpacing: 1,
                   color: isMe
-                      ? neonCyan.withOpacity(0.7)
+                      ? neonCyan.withValues(alpha: 0.8)
                       : Colors.blueGrey.shade400,
                 ),
               ),
@@ -57,7 +55,7 @@ class ChatBubble extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
               decoration: BoxDecoration(
-                color: isMe ? neonCyan : slatePanel.withOpacity(0.6),
+                color: isMe ? neonCyan : Colors.white,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(20),
                   topRight: const Radius.circular(20),
@@ -66,19 +64,13 @@ class ChatBubble extends StatelessWidget {
                 ),
                 border: Border.all(
                   color: isMe
-                      ? neonCyan.withOpacity(0.3)
-                      : neonCyan.withOpacity(0.15),
-                  width: 1.5,
+                      ? neonCyan.withValues(alpha: 0.1)
+                      : const Color(0xFFE2E8F0),
+                  width: 1,
                 ),
                 boxShadow: [
-                  if (isMe)
-                    BoxShadow(
-                      color: neonCyan.withOpacity(0.15),
-                      blurRadius: 15,
-                      spreadRadius: 2,
-                    ),
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withValues(alpha: 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -90,13 +82,10 @@ class ChatBubble extends StatelessWidget {
                   Text(
                     message,
                     style: TextStyle(
-                      color:
-                          isMe ? darkBg : Colors.white.withOpacity(0.9),
+                      color: isMe ? Colors.white : const Color(0xFF1E293B),
                       fontSize: 14,
                       height: 1.5,
-                      fontWeight:
-                          isMe ? FontWeight.w900 : FontWeight.w500,
-                      letterSpacing: 0.2,
+                      fontWeight: isMe ? FontWeight.w600 : FontWeight.w500,
                     ),
                   ),
                   if (time != null) ...[
@@ -105,11 +94,11 @@ class ChatBubble extends StatelessWidget {
                       time!,
                       style: TextStyle(
                         fontSize: 9,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w800,
                         color: isMe
-                            ? darkBg.withOpacity(0.5)
-                            : Colors.blueGrey.shade400,
-                        letterSpacing: 1,
+                            ? Colors.white.withValues(alpha: 0.7)
+                            : Colors.blueGrey.shade300,
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ],
@@ -119,32 +108,38 @@ class ChatBubble extends StatelessWidget {
 
             // 🔊 SPEAK button — only for bot messages when onSpeak is provided
             if (!isMe && onSpeak != null) ...[
-              const SizedBox(height: 5),
+              const SizedBox(height: 6),
               GestureDetector(
                 onTap: onSpeak,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                      horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: slatePanel,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    border:
-                        Border.all(color: neonCyan.withOpacity(0.2)),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.02),
+                        blurRadius: 5,
+                        offset: const Offset(0, 2),
+                      )
+                    ],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.volume_up_rounded,
-                          size: 13,
-                          color: neonCyan.withOpacity(0.8)),
-                      const SizedBox(width: 4),
+                      const Icon(Icons.volume_up_rounded,
+                          size: 14,
+                          color: neonCyan),
+                      const SizedBox(width: 6),
                       Text(
-                        'SPEAK',
+                        'LISTEN',
                         style: TextStyle(
-                          fontSize: 9,
+                          fontSize: 10,
                           fontWeight: FontWeight.w900,
-                          letterSpacing: 1.2,
-                          color: neonCyan.withOpacity(0.8),
+                          letterSpacing: 0.5,
+                          color: neonCyan,
                         ),
                       ),
                     ],

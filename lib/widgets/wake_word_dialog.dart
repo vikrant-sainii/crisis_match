@@ -134,9 +134,9 @@ class _WakeWordDialogState extends State<WakeWordDialog> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: neonCyan.withOpacity(0.05),
+              color: neonCyan.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: neonCyan.withOpacity(0.1)),
+              border: Border.all(color: neonCyan.withValues(alpha: 0.1)),
             ),
             child: Row(
               children: [
@@ -177,7 +177,7 @@ class _WakeWordDialogState extends State<WakeWordDialog> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 elevation: 4,
-                shadowColor: neonCyan.withOpacity(0.5),
+                shadowColor: neonCyan.withValues(alpha: 0.5),
               ),
               child: const Text(
                 'SAVE WAKE WORD',

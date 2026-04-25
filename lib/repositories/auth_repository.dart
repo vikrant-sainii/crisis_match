@@ -143,4 +143,12 @@ class AuthRepository {
     
     developer.log('AuthRepo: User $profileId blocked until $blockedUntil');
   }
+
+  /// Update emergency contacts for a profile
+  Future<void> updateEmergencyContacts(String userId, List<EmergencyContact> contacts) async {
+    developer.log('AuthRepo: Updating emergency contacts for $userId');
+    await _client.from('profiles').update({
+      'emergency_contacts': contacts.map((e) => e.toJson()).toList(),
+    }).eq('id', userId);
+  }
 }

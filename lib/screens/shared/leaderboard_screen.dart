@@ -14,13 +14,14 @@ class LeaderboardScreen extends StatefulWidget {
 
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
   // 🌃 CYBER THEME
-  static const Color darkBg = Color(0xFF0F172A);
-  static const Color slatePanel = Color(0xFF1E293B);
-  static const Color neonCyan = Color(0xFF22D3EE);
-  static const Color neonOrange = Color(0xFFFB923C);
-  static const Color gold = Color(0xFFFFD700);
-  static const Color silver = Color(0xFFC0C0C0);
-  static const Color bronze = Color(0xFFCD7F32);
+  // 🏙 SOFT UI THEME
+  static const Color saffron = Color(0xFFFF9933);
+  static const Color white = Color(0xFFFFFFFF);
+  static const Color green = Color(0xFF138808);
+  static const Color neonCyan = Color(0xFF2563EB);
+  static const Color gold = Color(0xFFF59E0B);
+  static const Color silver = Color(0xFF94A3B8);
+  static const Color bronze = Color(0xFFD97706);
 
   @override
   void initState() {
@@ -28,41 +29,55 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     context.read<LeaderboardBloc>().add(const LoadLeaderboard());
   }
 
+  
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: darkBg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded, color: neonCyan),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '🏆 FIELD AGENTS',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-                letterSpacing: 1.5,
-              ),
-            ),
-            Text(
-              'GLOBAL RESPONSE LEADERBOARD',
-              style: TextStyle(
-                color: neonCyan,
-                fontSize: 9,
-                letterSpacing: 2,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            saffron.withValues(alpha: 0.1),
+            Colors.white,
+            green.withValues(alpha: 0.1),
           ],
         ),
       ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'SAHAYAK LEADERBOARD',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              Text(
+                'INDIA RESPONSE RANKINGS',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  letterSpacing: 1,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
       body: BlocBuilder<LeaderboardBloc, LeaderboardState>(
         builder: (context, state) {
           if (state is LeaderboardLoading) {
@@ -83,9 +98,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.cloud_off_rounded, color: neonOrange, size: 48),
+                  const Icon(Icons.cloud_off_rounded, color: Colors.redAccent, size: 48),
                   const SizedBox(height: 12),
-                  Text(state.message, style: const TextStyle(color: Colors.white70, fontSize: 12), textAlign: TextAlign.center),
+                  Text(state.message, style: const TextStyle(color: Colors.blueGrey, fontSize: 12), textAlign: TextAlign.center),
                   const SizedBox(height: 16),
                   TextButton(
                     onPressed: () => context.read<LeaderboardBloc>().add(const LoadLeaderboard()),
@@ -130,6 +145,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           return const SizedBox.shrink();
         },
       ),
+      ),
     );
   }
 
@@ -159,20 +175,21 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: isSelected ? neonCyan.withOpacity(0.15) : slatePanel,
+                color: isSelected ? neonCyan : Colors.white,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: isSelected ? neonCyan : Colors.blueGrey.withOpacity(0.3),
-                  width: isSelected ? 1.5 : 1,
+                  color: isSelected ? neonCyan : const Color(0xFFE2E8F0),
+                  width: 1.5,
                 ),
+                boxShadow: isSelected ? [BoxShadow(color: neonCyan.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))] : [],
               ),
               child: Text(
                 occ.replaceAll('_', ' ').toUpperCase(),
                 style: TextStyle(
-                  color: isSelected ? neonCyan : Colors.blueGrey,
+                  color: isSelected ? Colors.white : Colors.blueGrey,
                   fontSize: 10,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: 1,
+                  letterSpacing: 0.5,
                 ),
               ),
             ),
@@ -188,13 +205,28 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     final third = entries.length > 2 ? entries[2] : null;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
       decoration: BoxDecoration(
-        color: slatePanel,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: gold.withOpacity(0.2)),
-        boxShadow: [BoxShadow(color: gold.withOpacity(0.05), blurRadius: 20)],
+        color: Colors.white,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            saffron.withValues(alpha: 0.1),
+            Colors.white,
+            green.withValues(alpha: 0.1),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 25,
+            offset: const Offset(0, 10),
+          )
+        ],
+        border: Border.all(color: Colors.white, width: 2),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -215,31 +247,48 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(medals[rank]!, style: const TextStyle(fontSize: 28)),
-          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withValues(alpha: 0.3), width: 2),
+            ),
+            child: CircleAvatar(
+              radius: 28,
+              backgroundColor: color.withValues(alpha: 0.1),
+              child: Text(
+                entry.name[0].toUpperCase(),
+                style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 20),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           Text(
             entry.name.split(' ').first,
-            style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 11),
+            style: const TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.w900, fontSize: 13),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           Text(
-            '${entry.totalScore.toStringAsFixed(0)} pts',
-            style: TextStyle(color: color.withOpacity(0.8), fontSize: 10),
+            '${entry.totalScore.toStringAsFixed(0)} PTS',
+            style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Container(
-            width: 80,
+            width: 70,
             height: height,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-              border: Border.all(color: color.withOpacity(0.4)),
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
+              boxShadow: [
+                BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4)),
+              ],
             ),
             child: Center(
               child: Text(
-                '#$rank',
-                style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 22),
+                medals[rank]!,
+                style: const TextStyle(fontSize: 24),
               ),
             ),
           ),
@@ -259,12 +308,19 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     return GestureDetector(
       onTap: () => _showHelperProfile(entry),
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 5),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
-          color: slatePanel,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: rankColor.withOpacity(0.2)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            )
+          ],
         ),
         child: Row(
           children: [
@@ -274,8 +330,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               height: 36,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: rankColor.withOpacity(0.15),
-                border: Border.all(color: rankColor.withOpacity(0.5)),
+                color: rankColor.withValues(alpha: 0.15),
+                border: Border.all(color: rankColor.withValues(alpha: 0.5)),
               ),
               child: Center(
                 child: Text(
@@ -290,11 +346,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(entry.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                  const SizedBox(height: 2),
                   Text(
-                    entry.occupation,
-                    style: TextStyle(color: neonOrange.withOpacity(0.8), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                    entry.name, 
+                    style: const TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.w800, fontSize: 15)
+                  ),
+                  Text(
+                    entry.occupation.toUpperCase(),
+                    style: TextStyle(color: Colors.blueGrey.shade400, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                   ),
                 ],
               ),
@@ -355,17 +413,22 @@ class _HelperProfileSheet extends StatelessWidget {
   static const Color slatePanel = Color(0xFF1E293B);
   static const Color neonCyan = Color(0xFF22D3EE);
   static const Color neonOrange = Color(0xFFFB923C);
-  static const Color gold = Color(0xFFFFD700);
 
   @override
   Widget build(BuildContext context) {
+    const saffron = Color(0xFFFF9933);
+    const green = Color(0xFF138808);
+
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: slatePanel,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: neonCyan.withOpacity(0.2)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 40),
+        ],
+        border: Border.all(color: saffron.withValues(alpha: 0.2), width: 1.5),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -374,25 +437,32 @@ class _HelperProfileSheet extends StatelessWidget {
           Container(
             width: 40, height: 4,
             margin: const EdgeInsets.only(bottom: 24),
-            decoration: BoxDecoration(color: Colors.blueGrey.withOpacity(0.5), borderRadius: BorderRadius.circular(4)),
+            decoration: BoxDecoration(color: Colors.blueGrey.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
           ),
 
           // Avatar + Rank
           Stack(
             alignment: Alignment.bottomRight,
             children: [
-              CircleAvatar(
-                radius: 40,
-                backgroundColor: neonCyan.withOpacity(0.15),
-                child: Text(
-                  entry.name.isNotEmpty ? entry.name[0].toUpperCase() : '?',
-                  style: const TextStyle(color: neonCyan, fontSize: 36, fontWeight: FontWeight.w900),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(colors: [saffron, Colors.white, green]),
+                ),
+                child: CircleAvatar(
+                  radius: 40,
+                  backgroundColor: Colors.white,
+                  child: Text(
+                    entry.name.isNotEmpty ? entry.name[0].toUpperCase() : '?',
+                    style: TextStyle(color: _rankColor(entry.rank), fontSize: 36, fontWeight: FontWeight.w900),
+                  ),
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _rankColor(entry.rank).withOpacity(0.2),
+                  color: _rankColor(entry.rank).withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: _rankColor(entry.rank)),
                 ),
@@ -406,16 +476,16 @@ class _HelperProfileSheet extends StatelessWidget {
           const SizedBox(height: 16),
 
           // Name
-          Text(entry.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22)),
+          Text(entry.name, style: const TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.w900, fontSize: 22)),
           const SizedBox(height: 4),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: neonOrange.withOpacity(0.1),
+              color: Colors.indigo.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: neonOrange.withOpacity(0.4)),
+              border: Border.all(color: Colors.indigo.withValues(alpha: 0.4)),
             ),
-            child: Text(entry.occupation, style: const TextStyle(color: neonOrange, fontWeight: FontWeight.bold, fontSize: 11)),
+            child: Text(entry.occupation, style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 11)),
           ),
           const SizedBox(height: 24),
 
@@ -436,11 +506,11 @@ class _HelperProfileSheet extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () => Navigator.pop(context),
               style: ElevatedButton.styleFrom(
-                backgroundColor: darkBg,
-                foregroundColor: neonCyan,
-                side: const BorderSide(color: neonCyan),
+                backgroundColor: saffron,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
+                elevation: 0,
               ),
               child: const Text('CLOSE', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2)),
             ),
@@ -454,9 +524,9 @@ class _HelperProfileSheet extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.25)),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Column(
         children: [

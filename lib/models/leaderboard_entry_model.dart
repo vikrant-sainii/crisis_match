@@ -8,6 +8,8 @@ class LeaderboardEntry extends Equatable {
   final int totalHelps;
   final double avgRating;
   final int rank;
+  final double? lat;
+  final double? lng;
 
   const LeaderboardEntry({
     required this.helperId,
@@ -17,6 +19,8 @@ class LeaderboardEntry extends Equatable {
     required this.totalHelps,
     required this.avgRating,
     required this.rank,
+    this.lat,
+    this.lng,
   });
 
   factory LeaderboardEntry.fromJson(Map<String, dynamic> json, {required int rank}) {
@@ -28,9 +32,11 @@ class LeaderboardEntry extends Equatable {
       totalHelps: json['total_helps'] ?? 0,
       avgRating: (json['avg_rating'] ?? 0).toDouble(),
       rank: rank,
+      lat: (json['lat'] as num?)?.toDouble(),
+      lng: (json['lng'] as num?)?.toDouble(),
     );
   }
 
   @override
-  List<Object?> get props => [helperId, name, occupation, totalScore, totalHelps, avgRating, rank];
+  List<Object?> get props => [helperId, name, occupation, totalScore, totalHelps, avgRating, rank, lat, lng];
 }

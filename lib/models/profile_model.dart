@@ -1,5 +1,36 @@
 import 'package:equatable/equatable.dart';
 
+class EmergencyContact extends Equatable {
+  final String name;
+  final String phone;
+  final String relation;
+
+  const EmergencyContact({
+    required this.name,
+    required this.phone,
+    required this.relation,
+  });
+
+  factory EmergencyContact.fromJson(Map<String, dynamic> json) {
+    return EmergencyContact(
+      name: json['name'] as String? ?? '',
+      phone: json['phone'] as String? ?? '',
+      relation: json['relation'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'phone': phone,
+      'relation': relation,
+    };
+  }
+
+  @override
+  List<Object?> get props => [name, phone, relation];
+}
+
 class ProfileModel extends Equatable {
   final String id;
   final String role;
@@ -11,6 +42,7 @@ class ProfileModel extends Equatable {
   final bool isBlocked;
   final DateTime? blockedUntil;
   final String? fcmToken;
+  final List<EmergencyContact> emergencyContacts;
 
   const ProfileModel({
     required this.id,
@@ -23,6 +55,7 @@ class ProfileModel extends Equatable {
     this.isBlocked = false,
     this.blockedUntil,
     this.fcmToken,
+    this.emergencyContacts = const [],
   });
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
@@ -41,6 +74,9 @@ class ProfileModel extends Equatable {
           ? DateTime.parse(json['blocked_until'] as String)
           : null,
       fcmToken: json['fcm_token'] as String?,
+      emergencyContacts: (json['emergency_contacts'] as List? ?? [])
+          .map((e) => EmergencyContact.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 
@@ -55,12 +91,24 @@ class ProfileModel extends Equatable {
       'is_blocked': isBlocked,
       'blocked_until': blockedUntil?.toIso8601String(),
       'fcm_token': fcmToken,
+      'emergency_contacts': emergencyContacts.map((e) => e.toJson()).toList(),
     };
   }
 
   @override
-  List<Object?> get props =>
-      [id, role, fullName, email, phone, avatarUrl, createdAt, isBlocked, blockedUntil, fcmToken];
+  List<Object?> get props => [
+        id,
+        role,
+        fullName,
+        email,
+        phone,
+        avatarUrl,
+        createdAt,
+        isBlocked,
+        blockedUntil,
+        fcmToken,
+        emergencyContacts,
+      ];
 
   ProfileModel copyWith({
     String? fullName,
@@ -69,6 +117,7 @@ class ProfileModel extends Equatable {
     bool? isBlocked,
     DateTime? blockedUntil,
     String? fcmToken,
+    List<EmergencyContact>? emergencyContacts,
   }) {
     return ProfileModel(
       id: id,
@@ -81,6 +130,7 @@ class ProfileModel extends Equatable {
       isBlocked: isBlocked ?? this.isBlocked,
       blockedUntil: blockedUntil ?? this.blockedUntil,
       fcmToken: fcmToken ?? this.fcmToken,
+      emergencyContacts: emergencyContacts ?? this.emergencyContacts,
     );
   }
 }

@@ -1,8 +1,8 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../blocs/auth/auth_bloc.dart';
-import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
 import '../../blocs/chat/chat_bloc.dart';
 import '../../blocs/chat/chat_event.dart';
@@ -21,16 +21,17 @@ import 'package:geolocator/geolocator.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../../widgets/chat_bubble.dart';
 import '../../widgets/status_badge.dart';
+import 'victim_history_screen.dart';
 import 'victim_map_screen.dart';
+import 'victim_profile_screen.dart';
 import 'voice_assistant_screen.dart';
 import '../../repositories/help_request_repository.dart';
-import '../../models/help_request_model.dart';
 import '../../repositories/leaderboard_repository.dart';
 import '../shared/leaderboard_screen.dart';
-import '../../blocs/admin/admin_bloc.dart';
-import '../../blocs/admin/admin_event.dart';
 import '../../blocs/connectivity/connectivity_bloc.dart';
 import '../../blocs/connectivity/connectivity_state.dart';
+import '../../blocs/admin/admin_bloc.dart';
+import '../../blocs/admin/admin_event.dart';
 import '../../repositories/low_network_repository.dart';
 import '../../widgets/low_network_sos_sheet.dart';
 import '../../widgets/helper_grid_map.dart';
@@ -54,8 +55,14 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
   StreamSubscription<Position>? _positionStream;
 
   bool _isListening = false;
-  bool _wasVoiced = false; // Flag to track if the current message started as voice
-  bool _hasShownRatingDialog = false; // Flag to track if rating dialog was shown
+  bool _wasVoiced =
+      false; // Flag to track if the current message started as voice
+  bool _hasShownRatingDialog =
+      false; // Flag to track if rating dialog was shown
+
+  // SOS Multi-Tap state
+  int _sosTapCount = 0;
+  DateTime? _lastSosTap;
 
   // Audio Player for AI responses
   late AudioPlayer _audioPlayer;
@@ -63,14 +70,29 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
   // SOS BLoC (created lazily with victimId)
   SosBloc? _sosBloc;
 
-  // 🌃 CYBER-DARK THEME CONSTANTS
-  static const Color darkBg = Color(0xFF0F172A); // Midnight Navy
-  static const Color slatePanel = Color(0xFF1E293B); // Slate Blue-Grey
-  static const Color neonCyan = Color(0xFF22D3EE); // Electric Cyan
-  static const Color neonOrange = Color(0xFFFB923C); // Hazard Orange
-  static const Color glassBorder = Color(0x3394A3B8); // Semi-transparent border
-  static const Color gold = Color(0xFFFFD700); // Semi-transparent border
+  // 🎨 MODERN LIGHT THEME CONSTANTS (Re-mapped for compatibility)
+  static const Color darkBg = Colors.white; // AppTheme.backgroundLight
+  static const Color slatePanel = Color(0xFFFFFFFF); // AppTheme.surfaceWhite
+  static const Color neonCyan = Color(0xFF1A47B8); // AppTheme.primaryBlue
+  static const Color neonOrange = Color(0xFFD32F2F); // AppTheme.emergencyRed
+  static const Color saffron = Color(0xFFFF9933);
+  static const Color green = Color(0xFF138808);
 
+  static final Gradient tricolorGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [saffron.withAlpha(10), Colors.white, green.withAlpha(10)],
+  );
+
+  // static final Gradient tricolorGradientSoft = LinearGradient(
+  //   begin: Alignment.topLeft,
+  //   end: Alignment.bottomRight,
+  //   colors: [
+  //     saffron.withAlpha(10),
+  //     Colors.white.withAlpha(50),
+  //     green.withAlpha(10),
+  //   ],
+  // );
   // Locally store initial AI messages for visual feedback
   final List<Map<String, String>> _localAiMessages = [];
 
@@ -86,7 +108,6 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
 
     context.read<LocationBloc>().add(GetCurrentLocation());
 
-
     _audioPlayer = AudioPlayer();
 
     final authState = context.read<AuthBloc>().state;
@@ -96,9 +117,11 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
       profileId = authState.profile.id;
       context.read<HelpRequestBloc>().add(LoadActiveRequest(profileId));
       context.read<AdminBloc>().add(LoadAdminData());
-      
+
       final helpState = context.read<HelpRequestBloc>().state;
-      if (_tabController.index == 1 && helpState is HelpRequestActive && helpState.request.status == 'accepted') {
+      if (_tabController.index == 1 &&
+          helpState is HelpRequestActive &&
+          helpState.request.status == 'accepted') {
         context.read<ChatBloc>().add(LoadMessages(helpState.request.id));
       }
     } else if (authState is AuthOfflineGuest) {
@@ -159,6 +182,32 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
     _sosBloc?.add(StartSosCapture());
   }
 
+  void _handleSosTap() {
+    final now = DateTime.now();
+    if (_lastSosTap == null ||
+        now.difference(_lastSosTap!) > const Duration(seconds: 1)) {
+      _sosTapCount = 1;
+    } else {
+      _sosTapCount++;
+    }
+    _lastSosTap = now;
+
+    if (_sosTapCount >= 3) {
+      _sosTapCount = 0;
+      _listen(); // Trigger SOS Choice flow
+    } else {
+      // Small feedback toast/snackbar
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tap ${3 - _sosTapCount} more times for SOS'),
+          duration: const Duration(milliseconds: 500),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    setState(() {});
+  }
+
   void _stopListening() {
     // Legacy mapping (no longer needed, VoiceAssistantScreen handles captures)
     if (_isListening) {
@@ -170,14 +219,17 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
     if (_tabController.index == 1) {
       final helpState = context.read<HelpRequestBloc>().state;
       String? requestId;
-      if (helpState is HelpRequestActive && (helpState.request.status == 'accepted' || helpState.request.status == 'completed')) {
+      if (helpState is HelpRequestActive &&
+          (helpState.request.status == 'accepted' ||
+              helpState.request.status == 'completed')) {
         requestId = helpState.request.id;
-      } else if (helpState is HelpRequestConversation && 
-                helpState.activeRequest != null && 
-                (helpState.activeRequest!.status == 'accepted' || helpState.activeRequest!.status == 'completed')) {
+      } else if (helpState is HelpRequestConversation &&
+          helpState.activeRequest != null &&
+          (helpState.activeRequest!.status == 'accepted' ||
+              helpState.activeRequest!.status == 'completed')) {
         requestId = helpState.activeRequest!.id;
       }
-      
+
       if (requestId != null) {
         context.read<ChatBloc>().add(LoadMessages(requestId));
       }
@@ -273,7 +325,8 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
     if (_tabController.index == 0) {
       _sendToN8n();
     } else if (_tabController.index == 1) {
-      _wasVoiced = false; // Chat with helper doesn't use AI voice assistant path
+      _wasVoiced =
+          false; // Chat with helper doesn't use AI voice assistant path
       _sendToHelper();
     }
     _messageController.clear();
@@ -327,62 +380,47 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
         listener: _onSosStateChanged,
         child: Scaffold(
           backgroundColor: darkBg,
+          floatingActionButtonLocation:
+              FloatingActionButtonLocation.centerDocked,
+          floatingActionButton: MediaQuery.of(context).viewInsets.bottom > 0
+              ? null
+              : _buildProminentSosButton(),
+          bottomNavigationBar: _buildBottomNavBar(context),
           body: SafeArea(
-            child: Stack(
+            top: false,
+            child: Column(
               children: [
-                // Main content
-                Column(
-                  children: [
-                    // 🛰 FLOATING CYBER HEADER
-                    _buildCyberHeader(),
+                // 🛰 MODERN HEADER
+                _buildHeader(context),
 
-                    // 📟 CYBER TAB SWITCHER
-                    _buildCyberSwitcher(),
-
-                    // 💬 MAIN CONTENT REGION
-                    Expanded(
-                      child: Stack(
+                // 💬 MAIN CONTENT REGION
+                Expanded(
+                  child: Stack(
+                    children: [
+                      // Active UI Views
+                      Column(
                         children: [
-                          // Background Grid or Subtle Pattern
-                          Positioned.fill(
-                            child: Opacity(
-                              opacity: 0.05,
-                              child: Image.network(
-                                'https://www.transparenttextures.com/patterns/carbon-fibre.png',
-                                repeat: ImageRepeat.repeat,
-                              ),
+                          // Active Alert Panel (Glow Card)
+                          _buildActiveAlertPanel(),
+
+                          Expanded(
+                            child: TabBarView(
+                              controller: _tabController,
+                              physics: const NeverScrollableScrollPhysics(),
+                              children: [
+                                _buildN8nChat(),
+                                _buildHelperChat(),
+                                const HelperGridMap(),
+                                const VictimHistoryScreen(),
+                              ],
                             ),
-                          ),
-
-                          // Active UI Views
-                          Column(
-                            children: [
-                              // Active Alert Panel (Glow Card)
-                              _buildActiveAlertPanel(),
-
-                              Expanded(
-                                child: TabBarView(
-                                  controller: _tabController,
-                                  physics:
-                                      const NeverScrollableScrollPhysics(),
-                                  children: [
-                                    _buildN8nChat(),
-                                    _buildHelperChat(),
-                                    const HelperGridMap(),
-                                    _buildHistoryTab(),
-                                  ],
-                                ),
-                              ),
-                            ],
                           ),
                         ],
                       ),
-                    ),
-                    _buildNightPillInput(),
-                  ],
+                    ],
+                  ),
                 ),
-
-
+                _buildNightPillInput(),
               ],
             ),
           ),
@@ -397,7 +435,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
       Navigator.push(
         context,
         PageRouteBuilder(
-          pageBuilder: (pageContext, animation, secondaryAnimation) => 
+          pageBuilder: (pageContext, animation, secondaryAnimation) =>
               BlocProvider.value(
                 value: context.read<SosBloc>(),
                 child: const VoiceAssistantScreen(),
@@ -408,7 +446,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
         ),
       );
     }
-    
+
     if (state is SosError) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -419,11 +457,11 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
     }
 
     if (state is SosOfflineInputPending) {
-      // First, pop the VoiceAssistantScreen if it was accidentally opened 
+      // First, pop the VoiceAssistantScreen if it was accidentally opened
       // (though branching in Bloc usually prevents this)
       if (Navigator.of(context).canPop()) {
-         // Check if top is VoiceAssistantScreen... 
-         // For now, just show the Bottom Sheet on top
+        // Check if top is VoiceAssistantScreen...
+        // For now, just show the Bottom Sheet on top
       }
 
       showModalBottomSheet(
@@ -442,7 +480,11 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              const Icon(
+                Icons.check_circle_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -458,7 +500,52 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
         ),
       );
     }
-    
+
+    if (state is SosAwaitingAction) {
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (ctx) => Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'SELECT SOS TYPE',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                leading: const Icon(Icons.woman_rounded, color: Colors.pink),
+                title: const Text('WOMEN SAFETY SOS'),
+                subtitle: const Text('Instant alert to contacts'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.read<SosBloc>().add(
+                    SelectWomanSafetyAction(state.lat, state.lon),
+                  );
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.mic_rounded, color: Colors.blue),
+                title: const Text('VOICE ASSISTANT'),
+                subtitle: const Text('Describe your emergency'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.read<SosBloc>().add(SelectVoiceAssistAction());
+                },
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (state is SosCaptured) {
       // 🎙️ PERSIST VOICE COMMAND TO CHAT LOG
       setState(() {
@@ -468,81 +555,120 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
     }
     // Handoff to HelpRequestBloc is now managed in VoiceAssistantScreen listener
   }
-  
 
-  Widget _buildCyberHeader() {
+  Widget _buildHeader(BuildContext context) {
+    final topPadding = MediaQuery.of(context).padding.top;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: EdgeInsets.fromLTRB(24, 16 + topPadding, 24, 16),
+      decoration: BoxDecoration(gradient: tricolorGradient),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
-            child: const Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'CRISIS-MATCH',
-                  style: TextStyle(
-                    color: neonCyan,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2,
+                ShaderMask(
+                  shaderCallback: (bounds) => const LinearGradient(
+                    colors: [
+                      Color(0xFFFF9933), // Saffron
+                      neonCyan, // Primary Blue
+                      Color(0xFF138808), // Green
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ).createShader(bounds),
+                  child: Text(
+                    'Sahayak Setu',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 Text(
-                  'ENCRYPTED RESPONSE CHANNEL',
-                  style: TextStyle(
-                    color: Colors.blueGrey,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
-                  ),
+                  'Emergency Response',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
                 ),
               ],
             ),
           ),
           Row(
             children: [
-              // 🛡️ SOS Shield Toggle
-              // 🛡️ SOS Shield Toggle - Hidden in COMMS tab to prevent state loss
-              if (_tabController.index != 1) _buildSosToggle(),
-              const SizedBox(width: 8),
+              // Connectivity Status Badge
+              BlocBuilder<ConnectivityBloc, ConnectivityState>(
+                builder: (context, state) {
+                  Color color;
+                  IconData icon;
+                  switch (state.status) {
+                    case ConnectivityStatus.online:
+                      color = const Color.fromARGB(255, 25, 54, 38);
+                      icon = Icons.wifi;
+                      break;
+                    case ConnectivityStatus.lowNetwork:
+                      color = Colors.orangeAccent;
+                      icon = Icons.network_check;
+                      break;
+                    case ConnectivityStatus.offline:
+                      color = Colors.redAccent;
+                      icon = Icons.portable_wifi_off;
+                      break;
+                  }
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: color.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(icon, color: color, size: 12),
+                        const SizedBox(width: 4),
+                        Text(
+                          state.status == ConnectivityStatus.online
+                              ? 'Online'
+                              : 'Offline',
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 12),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
+                  color: Colors.white,
                   shape: BoxShape.circle,
-                  border: Border.all(color: glassBorder),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: IconButton(
-                  icon: const Icon(
-                    Icons.leaderboard_rounded,
-                    color: gold,
-                  ),
+                  icon: const Icon(Icons.person_rounded, color: neonCyan),
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const VictimProfileScreen(),
+                      ),
                     );
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: glassBorder),
-                ),
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.power_settings_new_rounded,
-                    color: neonOrange,
-                  ),
-                  onPressed: () {
-                    _sosBloc?.add(DisableSos());
-                    context.read<HelpRequestBloc>().add(ClearHelpRequest());
-                    context.read<ChatBloc>().add(ClearChat());
-                    context.read<AuthBloc>().add(AuthSignOutRequested());
                   },
                 ),
               ),
@@ -553,132 +679,133 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
     );
   }
 
-  Widget _buildSosToggle() {
+  Widget _buildProminentSosButton() {
     return BlocBuilder<SosBloc, SosState>(
       builder: (context, sosState) {
         final isActive = sosState is SosListening;
-        final Color shieldColor = isActive ? Colors.greenAccent : Colors.blueGrey;
 
-        return Tooltip(
-          message: isActive ? 'SOS Guardian Active' : 'Shake device vigorously to send emergency SOS',
-          child: GestureDetector(
-            onTap: () {
-              if (isActive) {
-                _sosBloc!.add(DisableSos());
-              } else {
-                _sosBloc!.add(EnableSos());
-              }
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: isActive
-                    ? Colors.greenAccent.withOpacity(0.1)
-                    : Colors.white.withOpacity(0.05),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isActive
-                      ? Colors.greenAccent.withOpacity(0.5)
-                      : glassBorder,
-                  width: isActive ? 2 : 1,
-                ),
-                boxShadow: isActive
-                    ? [
-                        BoxShadow(
-                          color: Colors.greenAccent.withOpacity(0.3),
-                          blurRadius: 12,
-                          spreadRadius: 2,
-                        ),
-                      ]
-                    : [],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.shield_rounded,
-                    color: shieldColor,
-                    size: 22,
+        return GestureDetector(
+          onTap: () {
+            if (isActive) {
+              _sosBloc!.add(DisableSos());
+            } else {
+              _handleSosTap();
+            }
+          },
+          child: AnimatedBuilder(
+            animation: _pulseController,
+            builder: (context, child) {
+              final scale = isActive
+                  ? 1.0 + (_pulseController.value * 0.1)
+                  : 1.0;
+              final shadowOpacity = isActive
+                  ? (1.0 - _pulseController.value) * 0.5
+                  : 0.2;
+
+              return Transform.scale(
+                scale: scale,
+                child: Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF4D4D), Color(0xFFFF1A1A)],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 4,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.red.withValues(alpha: shadowOpacity),
+                        blurRadius: isActive ? 20 : 10,
+                        spreadRadius: isActive ? 10 : 2,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  if (isActive && sosState.gZ != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Z: ${sosState.gZ!.toStringAsFixed(2)}g',
-                      style: const TextStyle(fontSize: 9, color: Colors.greenAccent),
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.phone_in_talk_rounded,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'SOS',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      'Shakes: ${sosState.shakeCount}',
-                      style: const TextStyle(fontSize: 9, color: Colors.greenAccent),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+                  ),
+                ),
+              );
+            },
           ),
         );
       },
     );
   }
 
-
-  Widget _buildCyberSwitcher() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: slatePanel.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: glassBorder),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        onTap: (_) => setState(() {}),
-        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-        indicator: BoxDecoration(
-          color: neonCyan.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: neonCyan.withOpacity(0.5), width: 1.5),
-        ),
-        labelColor: neonCyan,
-        unselectedLabelColor: Colors.blueGrey.shade400,
-        indicatorSize: TabBarIndicatorSize.tab,
-        dividerColor: Colors.transparent,
-        labelStyle: const TextStyle(
-          fontWeight: FontWeight.w900,
-          fontSize: 11,
-          letterSpacing: 0.5,
-        ),
-        tabs: [
-          const Tab(text: 'AI PROBE'),
-          BlocBuilder<HelpRequestBloc, HelpRequestState>(
-            builder: (context, state) {
-              final active = state is HelpRequestActive && 
-                   (state.request.status == 'accepted' || state.request.status == 'completed');
-              return Tab(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('COMMS'),
-                    if (active) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: Colors.greenAccent,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            },
+  Widget _buildBottomNavBar(BuildContext context) {
+    return BottomAppBar(
+      shape: const CircularNotchedRectangle(),
+      notchMargin: 8.0,
+      color: Colors.white,
+      elevation: 0,
+      child: SizedBox(
+        height: 60,
+        child: TabBar(
+          controller: _tabController,
+          onTap: (_) => setState(() {}),
+          dividerColor: Colors.transparent,
+          labelColor: Theme.of(context).primaryColor,
+          unselectedLabelColor: Colors.grey.shade500,
+          indicatorColor: Colors.transparent, // No indicator line
+          labelPadding: EdgeInsets.zero,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 9),
+          unselectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.normal,
+            fontSize: 9,
           ),
-          const Tab(text: 'THE GRID'),
-          const Tab(text: 'LOGS'),
-        ],
+          tabs: [
+            const Tab(icon: Icon(Icons.smart_toy_outlined), text: 'AI ASSIST'),
+            BlocBuilder<HelpRequestBloc, HelpRequestState>(
+              builder: (context, state) {
+                final active =
+                    state is HelpRequestActive &&
+                    (state.request.status == 'accepted' ||
+                        state.request.status == 'completed');
+                return Tab(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.chat_bubble_outline,
+                        color: active ? Colors.red : null,
+                      ),
+                      const SizedBox(height: 4),
+                      const Text('CHAT'),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const Tab(icon: Icon(Icons.map_outlined), text: 'MAP'),
+            const Tab(icon: Icon(Icons.history_rounded), text: 'HISTORY'),
+          ],
+        ),
       ),
     );
   }
@@ -695,11 +822,15 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
               backgroundColor: darkBg,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: neonCyan.withOpacity(0.5)),
+                side: BorderSide(color: neonCyan.withValues(alpha: 0.5)),
               ),
               title: const Text(
                 'FIELD AGENT RATING',
-                style: TextStyle(color: neonCyan, fontWeight: FontWeight.bold, letterSpacing: 1),
+                style: TextStyle(
+                  color: neonCyan,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                ),
                 textAlign: TextAlign.center,
               ),
               content: Column(
@@ -715,7 +846,9 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                     children: List.generate(5, (index) {
                       return IconButton(
                         icon: Icon(
-                          index < rating ? Icons.star_rounded : Icons.star_border_rounded,
+                          index < rating
+                              ? Icons.star_rounded
+                              : Icons.star_border_rounded,
                           color: Colors.amber,
                           size: 36,
                         ),
@@ -743,14 +876,23 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                   onPressed: () async {
                     // Skip applies default 3
                     Navigator.pop(ctx);
-                    await context.read<LeaderboardRepository>().submitRating(requestId, 3);
+                    await context.read<LeaderboardRepository>().submitRating(
+                      requestId,
+                      3,
+                    );
                   },
-                  child: const Text('SKIP', style: TextStyle(color: Colors.blueGrey)),
+                  child: const Text(
+                    'SKIP',
+                    style: TextStyle(color: Colors.blueGrey),
+                  ),
                 ),
                 ElevatedButton(
                   onPressed: () async {
                     Navigator.pop(ctx);
-                    await context.read<LeaderboardRepository>().submitRating(requestId, rating);
+                    await context.read<LeaderboardRepository>().submitRating(
+                      requestId,
+                      rating,
+                    );
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Rating submitted. Thank you!'),
@@ -762,7 +904,10 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                     backgroundColor: neonCyan,
                     foregroundColor: darkBg,
                   ),
-                  child: const Text('SUBMIT', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    'SUBMIT',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             );
@@ -777,7 +922,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
       listener: (context, state) {
         if (state is HelpRequestActive) {
           final req = state.request;
-          
+
           if (req.status == 'accepted') {
             // Intelligent Tab Switch: Only switch to COMMS if not already on a tracking/history tab
             if (_tabController.index == 0) {
@@ -789,20 +934,23 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
           } else if (req.status == 'pending') {
             _startVictimLocationPush(req.id);
           } else if (req.status == 'completed') {
-             _stopVictimLocationPush();
-             if (!_hasShownRatingDialog) {
-               _hasShownRatingDialog = true;
-               
-               // Async check to prevent showing dialog on every app restart if already rated
-               context.read<LeaderboardRepository>().hasSessionBeenRated(req.id).then((alreadyRated) {
-                 if (!alreadyRated && mounted) {
-                   _showRatingDialog(req.id);
-                 }
-               });
-             }
+            _stopVictimLocationPush();
+            if (!_hasShownRatingDialog) {
+              _hasShownRatingDialog = true;
+
+              // Async check to prevent showing dialog on every app restart if already rated
+              context
+                  .read<LeaderboardRepository>()
+                  .hasSessionBeenRated(req.id)
+                  .then((alreadyRated) {
+                    if (!alreadyRated && mounted) {
+                      _showRatingDialog(req.id);
+                    }
+                  });
+            }
           }
         }
-        
+
         if (state is HelpRequestInitial) {
           _stopVictimLocationPush();
           _hasShownRatingDialog = false;
@@ -812,7 +960,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
           setState(() {
             _localAiMessages.add({'role': 'bot', 'message': state.message});
           });
-          _scrollToBottom(_n8nScrollController);  
+          _scrollToBottom(_n8nScrollController);
           // 🎙️ AUTO-PLAY VOICE RESPONSE
           if (state.audioPath != null) {
             _audioPlayer.play(DeviceFileSource(state.audioPath!));
@@ -823,13 +971,15 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
         if (state is HelpRequestInitial) {
           return const SizedBox.shrink();
         }
-        
+
         if (state is HelpRequestSearching) {
           // Find if we have a current request to cancel (from persistent BLoC state)
-          final activeReq = context.read<HelpRequestBloc>().currentActiveRequest;
+          final activeReq = context
+              .read<HelpRequestBloc>()
+              .currentActiveRequest;
           return _buildSearchingRadar(activeReq?.id);
         }
-        
+
         if (state is HelpRequestActive) {
           final req = state.request;
           if (req.status == 'accepted') {
@@ -841,27 +991,23 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
               state,
             );
           } else if (req.status == 'completed') {
-            return _buildNeonStatusHeader(
-              'THREAT NEUTRALIZED / AID DELIVERED',
-              Colors.greenAccent,
-              Icons.verified_rounded,
-              false,
-              state,
-            );
+            return const SizedBox.shrink();
           } else if (req.status == 'pending') {
             return _buildNeonMatchCard(state);
           }
         }
-        
+
         if (state is HelpRequestConversation) {
           final req = state.activeRequest;
           if (req != null) {
             if (req.status == 'pending' || req.status == 'accepted') {
-              return _buildNeonMatchCard(HelpRequestActive(
-                req,
-                matchedId: state.matchedId,
-                distance: state.distance,
-              ));
+              return _buildNeonMatchCard(
+                HelpRequestActive(
+                  req,
+                  matchedId: state.matchedId,
+                  distance: state.distance,
+                ),
+              );
             } else if (req.status == 'rejected') {
               return _buildSearchingRadar(req.id);
             }
@@ -880,9 +1026,9 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: slatePanel.withOpacity(0.3),
+        gradient: tricolorGradient,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: neonCyan.withOpacity(0.2)),
+        border: Border.all(color: neonCyan.withValues(alpha: 0.2)),
       ),
       child: Column(
         children: [
@@ -901,13 +1047,17 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: neonCyan.withOpacity(0.3),
+                        color: neonCyan.withValues(alpha: 0.3),
                         blurRadius: 15,
                         spreadRadius: 2,
                       ),
                     ],
                   ),
-                  child: const Icon(Icons.radar_rounded, color: neonCyan, size: 24),
+                  child: const Icon(
+                    Icons.radar_rounded,
+                    color: neonCyan,
+                    size: 24,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -942,15 +1092,12 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(color: neonOrange.withOpacity(0.3)),
+                    side: BorderSide(color: neonOrange.withValues(alpha: 0.3)),
                   ),
                 ),
                 child: const Text(
                   'STOP SEARCH',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
                 ),
               ),
             ],
@@ -969,12 +1116,12 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
     return Container(
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: slatePanel,
+        gradient: tricolorGradient,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: color.withOpacity(0.5), width: 1.5),
+        border: Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             blurRadius: 30,
             spreadRadius: -5,
           ),
@@ -986,14 +1133,14 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(22),
               ),
             ),
             child: Center(
               child: Text(
-                isRejected ? 'MATCH DROPPED' : 'PROXY MATCH FOUND',
+                isRejected ? 'MATCH DROPPED' : 'SAHAYAK MATCH FOUND',
                 style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.w900,
@@ -1012,9 +1159,9 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: darkBg,
+                        color: Colors.white,
                         shape: BoxShape.circle,
-                        border: Border.all(color: glassBorder),
+                        border: Border.all(color: Colors.grey.shade200),
                       ),
                       child: Icon(
                         Icons.person_outline_rounded,
@@ -1030,7 +1177,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                           Text(
                             state.request.helperName ?? "ANONYMOUS",
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: Colors.black87,
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
@@ -1055,34 +1202,46 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                 // --- DISTANCE & ETA ---
                 if (state.request.distance != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
-                      color: darkBg,
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: glassBorder),
+                      border: Border.all(color: Colors.grey.shade200),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.location_on_rounded, color: neonCyan, size: 16),
-                            const SizedBox(width: 8),
-                            Text(
-                              state.request.distance!,
-                              style: const TextStyle(
-                                color: neonCyan,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.location_on_rounded,
+                                color: Theme.of(context).primaryColor,
+                                size: 16,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  state.request.distance!,
+                                  style: TextStyle(
+                                    color: Theme.of(context).primaryColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         if (isPending)
-                          Text(
+                          const Text(
                             'AWAITING ACCEPTANCE...',
                             style: TextStyle(
-                              color: neonOrange,
+                              color: Colors.orange,
                               fontSize: 10,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 1,
@@ -1091,7 +1250,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                       ],
                     ),
                   ),
-              ]
+              ],
             ),
           ),
         ],
@@ -1110,10 +1269,12 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: slatePanel.withOpacity(0.8),
+        gradient: tricolorGradient,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.05), blurRadius: 20)],
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(color: color.withValues(alpha: 0.05), blurRadius: 20),
+        ],
       ),
       child: Column(
         children: [
@@ -1140,7 +1301,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton.icon(
+                  child: ElevatedButton.icon(
                     onPressed: () => Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -1156,14 +1317,17 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1,
+                        fontSize: 11,
                       ),
                     ),
-                    style: OutlinedButton.styleFrom(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
                       foregroundColor: neonCyan,
-                      side: const BorderSide(color: neonCyan),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      elevation: 8,
+                      shadowColor: Colors.black.withValues(alpha: 0.1),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                     ),
                   ),
@@ -1194,17 +1358,18 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                         style: TextStyle(
                           fontWeight: FontWeight.w900,
                           letterSpacing: 1,
+                          fontSize: 11,
                         ),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: neonCyan,
-                        foregroundColor: darkBg,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                         elevation: 10,
-                        shadowColor: neonCyan.withOpacity(0.5),
+                        shadowColor: neonCyan.withValues(alpha: 0.4),
                       ),
                     ),
                   ),
@@ -1220,7 +1385,10 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
   Widget _buildN8nChat() {
     return BlocBuilder<HelpRequestBloc, HelpRequestState>(
       builder: (context, state) {
-        if (_localAiMessages.isEmpty && state is HelpRequestInitial) {
+        final isCompleted =
+            state is HelpRequestActive && state.request.status == 'completed';
+        if (_localAiMessages.isEmpty &&
+            (state is HelpRequestInitial || isCompleted)) {
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1230,29 +1398,53 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: neonCyan.withOpacity(0.1),
+                      color: neonCyan.withValues(alpha: 0.1),
                       width: 2,
                     ),
                   ),
-                  child: const Icon(
-                    Icons.bolt_rounded,
-                    size: 64,
-                    color: neonCyan,
+                  child: ShaderMask(
+                    shaderCallback: (bounds) => const LinearGradient(
+                      colors: [
+                        Color(0xFFFF9933), // Saffron
+                        Colors.white,
+                        Color(0xFF138808), // Green
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ).createShader(bounds),
+                    child: const Icon(
+                      Icons.bolt_rounded,
+                      size: 64,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  'AI ASSISTANT READY',
-                  style: TextStyle(
-                    color: neonCyan,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 4,
+                ShaderMask(
+                  shaderCallback: (bounds) => const LinearGradient(
+                    colors: [
+                      Color(0xFFFF9933), // Saffron
+                      Color(
+                        0xFF000080,
+                      ), // Navy Blue (better for text contrast than pure white)
+                      Color(0xFF138808), // Green
+                    ],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ).createShader(bounds),
+                  child: const Text(
+                    'AI SAHAYAK READY',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 4,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'TRANSMIT YOUR EMERGENCY PROTOCOL',
+                  'TRANSMIT YOUR EMERGENCY',
                   style: TextStyle(
                     color: Colors.blueGrey.shade400,
                     fontSize: 12,
@@ -1263,32 +1455,45 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
             ),
           );
         }
-        return ListView.builder(
-          controller: _n8nScrollController,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          itemCount: _localAiMessages.length,
-          itemBuilder: (context, index) {
-            final msg = _localAiMessages[index];
-            final isBot = msg['role'] != 'user';
-            return ChatBubble(
-              message: msg['message']!,
-              isMe: !isBot,
-              senderLabel: isBot ? 'AI-CORE' : 'ME',
-              onSpeak: isBot
-                  ? () async {
-                      final path = await context
-                          .read<HelpRequestRepository>()
-                          .triggerTTS(msg['message']!);
-                      if (path != null) {
-                        await _audioPlayer.stop();
-                        await _audioPlayer.play(DeviceFileSource(path));
-                      }
-                    }
-                  : null,
-            );
-          },
+        return Stack(
+          children: [
+            Center(
+              child: Opacity(
+                opacity: 0.05,
+                child: Icon(
+                  Icons.smart_toy_outlined,
+                  size: MediaQuery.of(context).size.width * 0.6,
+                  color: neonCyan,
+                ),
+              ),
+            ),
+            ListView.builder(
+              controller: _n8nScrollController,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              itemCount: _localAiMessages.length,
+              itemBuilder: (context, index) {
+                final msg = _localAiMessages[index];
+                final isBot = msg['role'] != 'user';
+                return ChatBubble(
+                  message: msg['message']!,
+                  isMe: !isBot,
+                  senderLabel: isBot ? 'AI-CORE' : 'ME',
+                  onSpeak: isBot
+                      ? () async {
+                          final path = await context
+                              .read<HelpRequestRepository>()
+                              .triggerTTS(msg['message']!);
+                          if (path != null) {
+                            await _audioPlayer.stop();
+                            await _audioPlayer.play(DeviceFileSource(path));
+                          }
+                        }
+                      : null,
+                );
+              },
+            ),
+          ],
         );
-
       },
     );
   }
@@ -1296,9 +1501,11 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
   Widget _buildHelperChat() {
     return BlocBuilder<HelpRequestBloc, HelpRequestState>(
       builder: (context, helpState) {
-        final isActiveMission = helpState is HelpRequestActive && 
-                   (helpState.request.status == 'accepted' || helpState.request.status == 'completed');
-        
+        final isActiveMission =
+            helpState is HelpRequestActive &&
+            (helpState.request.status == 'accepted' ||
+                helpState.request.status == 'completed');
+
         if (!isActiveMission) {
           return Center(
             child: Opacity(
@@ -1347,110 +1554,39 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                 );
               }
               _scrollToBottom(_helperScrollController);
-              return ListView.builder(
-                controller: _helperScrollController,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                itemCount: messages.length,
-                itemBuilder: (context, index) {
-                  final msg = messages[index];
-                  final isMe = msg.senderId == userId;
-                  return ChatBubble(
-                    message: msg.message,
-                    isMe: isMe,
-                    senderLabel: isMe ? 'CLIENT' : 'RESPONDER',
-                  );
-                },
+              return Stack(
+                children: [
+                  Center(
+                    child: Opacity(
+                      opacity: 0.05,
+                      child: Icon(
+                        Icons.support_agent_rounded,
+                        size: MediaQuery.of(context).size.width * 0.6,
+                        color: neonCyan,
+                      ),
+                    ),
+                  ),
+                  ListView.builder(
+                    controller: _helperScrollController,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) {
+                      final msg = messages[index];
+                      final isMe = msg.senderId == userId;
+                      return ChatBubble(
+                        message: msg.message,
+                        isMe: isMe,
+                        senderLabel: isMe ? 'CLIENT' : 'RESPONDER',
+                      );
+                    },
+                  ),
+                ],
               );
             }
             return const Center(
               child: CircularProgressIndicator(color: neonCyan),
             );
           },
-        );
-      },
-    );
-  }
-
-  Widget _buildHistoryTab() {
-    final authState = context.read<AuthBloc>().state;
-    if (authState is! AuthAuthenticated) return const SizedBox.shrink();
-
-    return FutureBuilder<List<HelpRequestModel>>(
-      future: context.read<HelpRequestRepository>().getVictimHistory(
-        authState.profile.id,
-      ),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: neonCyan),
-          );
-        }
-        final history = (snapshot.data ?? [])
-            .where((r) => r.status == 'completed' || r.status == 'rejected')
-            .toList();
-        if (history.isEmpty) {
-          return const Center(
-            child: Text(
-              'ARCHIVES EMPTY',
-              style: TextStyle(color: Colors.blueGrey, letterSpacing: 2),
-            ),
-          );
-        }
-
-        return RefreshIndicator(
-          onRefresh: () async {
-            final authState = context.read<AuthBloc>().state;
-            if (authState is AuthAuthenticated) {
-              setState(() {}); // Trigger FutureBuilder reload
-            }
-            await Future.delayed(const Duration(milliseconds: 500));
-          },
-          color: neonCyan,
-          backgroundColor: darkBg,
-          child: ListView.builder(
-            physics: const AlwaysScrollableScrollPhysics(),
-            itemCount: history.length,
-            padding: const EdgeInsets.all(16),
-            itemBuilder: (context, index) {
-              final req = history[index];
-              final isCompleted = req.status == 'completed';
-              final color = isCompleted ? Colors.greenAccent : neonOrange;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: slatePanel.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: color.withOpacity(0.2)),
-                ),
-                child: ListTile(
-                  leading: Icon(
-                    isCompleted
-                        ? Icons.check_circle_outline_rounded
-                        : Icons.history_toggle_off_rounded,
-                    color: color,
-                  ),
-                  title: Text(
-                    req.crisisType.toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1,
-                      fontSize: 14,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'RESPONDER: ${req.helperName ?? "ANON"}',
-                    style: TextStyle(
-                      color: Colors.blueGrey.shade400,
-                      fontSize: 11,
-                    ),
-                  ),
-                  trailing: StatusBadge(status: req.status),
-                  onTap: req.txHash != null ? () => _launchTx(req.txHash!) : null,
-                ),
-              );
-            },
-          ),
         );
       },
     );
@@ -1463,8 +1599,9 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
           return const SizedBox.shrink();
         }
 
-        bool isResolved = (helpState is HelpRequestActive &&
-                helpState.request.status == 'completed');
+        bool isResolved =
+            (helpState is HelpRequestActive &&
+            helpState.request.status == 'completed');
         bool disableAiInput =
             _tabController.index == 0 && (helpState is HelpRequestSearching);
 
@@ -1484,103 +1621,118 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
           );
         }
 
+        final isChatTab = _tabController.index == 1;
+        final leadingIcon = isChatTab
+            ? Icons.chat_bubble_outline
+            : Icons.auto_awesome;
+        final hintText = isChatTab
+            ? 'Type message for responder...'
+            : (disableAiInput ? 'PROBING NETWORK...' : 'Ask AI Assistant...');
+        final sendIcon = isChatTab
+            ? Icons.send_rounded
+            : Icons.arrow_upward_rounded;
+
         return Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-          decoration: BoxDecoration(
-            color: darkBg,
-            boxShadow: [
-              BoxShadow(
-                color: neonCyan.withOpacity(0.05),
-                blurRadius: 40,
-                offset: const Offset(0, -10),
-              ),
-            ],
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+          decoration: const BoxDecoration(color: Colors.white),
           child: Row(
             children: [
               Expanded(
                 child: Container(
+                  height: 56,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
-                    color: slatePanel,
-                    borderRadius: BorderRadius.circular(24),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(15),
                     border: Border.all(
-                      color: disableAiInput
-                          ? Colors.transparent
-                          : neonCyan.withOpacity(0.3),
+                      color: const Color(0xFFE3F2FD),
+                      width: 1.5,
                     ),
                     boxShadow: [
-                      if (!disableAiInput)
-                        BoxShadow(
-                          color: neonCyan.withOpacity(0.05),
-                          blurRadius: 15,
-                          spreadRadius: 2,
-                        ),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
                     ],
                   ),
-                  child: TextField(
-                    controller: _messageController,
-                    enabled: !disableAiInput,
-                    style: const TextStyle(color: Colors.white, fontSize: 15),
-                    decoration: InputDecoration(
-                      hintText: disableAiInput
-                          ? 'PROBING NETWORK...'
-                          : 'DATA INPUT...',
-                      hintStyle: TextStyle(
-                        color: Colors.blueGrey.shade600,
-                        letterSpacing: 1,
+                  child: Row(
+                    children: [
+                      Icon(
+                        leadingIcon,
+                        color: const Color(0xFF2196F3),
+                        size: 20,
                       ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 14,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _messageController,
+                          enabled: !disableAiInput,
+                          style: const TextStyle(
+                            color: Colors.black87,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: hintText,
+                            hintStyle: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w400,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          onSubmitted: disableAiInput
+                              ? null
+                              : (_) => _sendMessage(),
+                        ),
                       ),
-                      suffixIcon: !disableAiInput
-                          ? IconButton(
-                              icon: Icon(
-                                _isListening ? Icons.mic : Icons.mic_none,
-                                color: _isListening
-                                    ? neonOrange
-                                    : Colors.blueGrey,
-                              ),
-                              onPressed: _listen,
-                            )
-                          : null,
-                    ),
-                    onSubmitted: disableAiInput ? null : (_) => _sendMessage(),
+                      IconButton(
+                        icon: Icon(
+                          _isListening ? Icons.mic : Icons.mic_none_rounded,
+                          color: _isListening
+                              ? Colors.red
+                              : Colors.grey.shade400,
+                        ),
+                        onPressed: _listen,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
                   ),
                 ),
               ),
               const SizedBox(width: 12),
-              BlocBuilder<ConnectivityBloc, ConnectivityState>(
-                builder: (context, connState) {
-                  final isOffline = connState.status == ConnectivityStatus.offline;
-                  final color = isOffline ? neonOrange : neonCyan;
-                  final icon = isOffline ? Icons.sms_rounded : Icons.arrow_upward_rounded;
-                  
-                  return GestureDetector(
-                    onTap: disableAiInput ? null : _sendMessage,
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: disableAiInput ? Colors.blueGrey.shade800 : color,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          if (!disableAiInput)
-                            BoxShadow(
-                              color: color.withOpacity(0.4),
-                              blurRadius: 15,
-                              spreadRadius: 2,
-                            ),
-                        ],
-                      ),
-                      child: Icon(
-                        icon,
-                        color: darkBg,
-                        size: 24,
-                      ),
-                    ),
-                  );
-                },
+              GestureDetector(
+                onTap: disableAiInput ? null : _sendMessage,
+                child: Container(
+                  height: 52,
+                  width: 52,
+                  decoration: BoxDecoration(
+                    color: disableAiInput
+                        ? Colors.grey.shade300
+                        : const Color(0xFF2196F3),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      if (!disableAiInput)
+                        BoxShadow(
+                          color: const Color(0xFF2196F3).withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                    ],
+                  ),
+                  child: Icon(
+                    sendIcon,
+                    color: Colors.white,
+                    size: isChatTab
+                        ? 24
+                        : 28, // send_rounded looks better slightly smaller
+                  ),
+                ),
               ),
             ],
           ),

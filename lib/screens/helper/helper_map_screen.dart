@@ -242,7 +242,7 @@ class _HelperMapScreenState extends State<HelperMapScreen> {
           position: _myLocation!,
           infoWindow: const InfoWindow(title: 'You (Helper)'),
           icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueGreen,
+            BitmapDescriptor.hueAzure,
           ),
         ),
       );
@@ -264,25 +264,42 @@ class _HelperMapScreenState extends State<HelperMapScreen> {
         Polyline(
           polylineId: const PolylineId('route'),
           points: _polylineCoordinates,
-          color: Colors.blue.withValues(alpha: 0.7),
+          color: const Color(0xFF2563EB).withValues(alpha: 0.7),
           width: 5,
         ),
       );
     }
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Route to Victim'),
+        backgroundColor: Colors.white.withValues(alpha: 0.9),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: const Text(
+          'MISSION TRACKING',
+          style: TextStyle(
+            color: Color(0xFF1E293B),
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1,
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF1E293B), size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.center_focus_strong),
+            icon: const Icon(Icons.center_focus_strong, color: Color(0xFF2563EB)),
             tooltip: 'Fit both markers',
             onPressed: _fitBothMarkers,
           ),
         ],
       ),
       body: _myLocation == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB)))
           : GoogleMap(
               mapType: MapType.normal,
               initialCameraPosition: CameraPosition(
@@ -300,88 +317,101 @@ class _HelperMapScreenState extends State<HelperMapScreen> {
               },
             ),
       bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
         decoration: BoxDecoration(
           color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
             ),
           ],
         ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.person_pin_circle,
-                    color: Colors.red,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.location_on_rounded,
+                    color: Color(0xFFEF4444),
                     size: 24,
                   ),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Navigate to victim',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'TARGET ACQUIRED',
+                        style: TextStyle(
+                          color: Colors.blueGrey,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1,
+                        ),
                       ),
+                      Text(
+                        _formatDistance(_distanceMeters),
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () {}, // Optional: Open system maps
+                  icon: const Icon(Icons.navigation_rounded, size: 18),
+                  label: const Text('NAVIGATE'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _victimLocation != null
-                          ? Colors.red[50]
-                          : Colors.orange[50],
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      _formatDistance(_distanceMeters),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: _victimLocation != null
-                            ? Colors.red[700]
-                            : Colors.orange[700],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(
-                    Icons.circle,
-                    size: 10,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Icon(
+                  Icons.circle,
+                  size: 10,
+                  color: _victimLocation != null
+                      ? const Color(0xFF10B981)
+                      : const Color(0xFFF59E0B),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _victimLocation != null
+                      ? 'Live victim signal connected'
+                      : 'Acquiring victim coordinates...',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
                     color: _victimLocation != null
-                        ? Colors.green
-                        : Colors.orange,
+                        ? const Color(0xFF059669)
+                        : const Color(0xFFD97706),
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _victimLocation != null
-                        ? 'Victim location acquired'
-                        : 'Waiting for victim location...',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: _victimLocation != null
-                          ? Colors.green[600]
-                          : Colors.orange[600],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

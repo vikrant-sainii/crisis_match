@@ -18,7 +18,7 @@ class HelpRequestActive extends HelpRequestState {
   final HelpRequestModel request;
   final String? matchedId; // The pointer for the N8N array
   final String? distance; // E.g., "2.5 km"
-  
+
   const HelpRequestActive(this.request, {this.matchedId, this.distance});
 
   @override
@@ -58,5 +58,11 @@ class HelpRequestConversation extends HelpRequestState {
   });
 
   @override
-  List<Object?> get props => [message, audioPath, activeRequest, matchedId, distance];
+  List<Object?> get props => [
+    message,
+    audioPath,
+    activeRequest,
+    matchedId,
+    distance,
+  ];
 }

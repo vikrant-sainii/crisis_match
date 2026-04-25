@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -19,6 +20,7 @@ import '../../screens/shared/leaderboard_screen.dart';
 import '../../widgets/status_badge.dart';
 import 'helper_chat_screen.dart';
 import 'helper_map_screen.dart';
+import 'helper_profile_screen.dart';
 
 class HelperHomeScreen extends StatefulWidget {
   const HelperHomeScreen({super.key});
@@ -32,13 +34,24 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
   bool _isAvailable = true;
   String? _helperId;
   late TabController _tabController;
+  Timer? _priorityHeartbeat;
 
-  // 🌃 CYBER-DARK THEME CONSTANTS (Matching Victim UI)
-  static const Color darkBg = Color(0xFF0F172A);
-  static const Color slatePanel = Color(0xFF1E293B);
-  static const Color neonCyan = Color(0xFF22D3EE);
-  static const Color neonOrange = Color(0xFFFB923C);
-  static const Color glassBorder = Color(0x3394A3B8);
+  // 🏙 SOFT UI THEME CONSTANTS (Matching Modern Design)
+  static const Color darkBg = Color(0xFFF8FAFC);
+  static const Color slatePanel = Colors.white;
+  static const Color neonCyan = Color(0xFF2563EB); // Trust Blue
+  static const Color neonOrange = Color(0xFFEF4444); // Emergency Red
+  static const Color glassBorder = Color(0xFFE2E8F0);
+
+  static final Gradient tricolorGradientSoft = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      const Color(0xFFFF9933).withValues(alpha: 0.08),
+      Colors.white,
+      const Color(0xFF138808).withValues(alpha: 0.08),
+    ],
+  );
 
   @override
   void initState() {
@@ -46,6 +59,7 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
     _tabController = TabController(length: 4, vsync: this);
     context.read<LocationBloc>().add(GetCurrentLocation());
     _loadHelperAndSubscribe();
+    _startPriorityHeartbeat();
   }
 
   Future<void> _loadHelperAndSubscribe() async {
@@ -86,6 +100,7 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _priorityHeartbeat?.cancel();
     super.dispose();
   }
 
@@ -94,6 +109,7 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
     return Scaffold(
       backgroundColor: darkBg,
       body: SafeArea(
+        top: false,
         child: Column(
           children: [
             // 🛰 FLOATING CYBER HEADER
@@ -182,10 +198,10 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
                               margin: const EdgeInsets.all(24),
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.1),
+                                color: Colors.red.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: Colors.red.withOpacity(0.3),
+                                  color: Colors.red.withValues(alpha: 0.3),
                                 ),
                               ),
                               child: Column(
@@ -227,30 +243,48 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
   }
 
   Widget _buildCyberHeader() {
+    final topPadding = MediaQuery.of(context).padding.top;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: EdgeInsets.fromLTRB(24, 24 + topPadding, 24, 16),
+      decoration: BoxDecoration(
+        gradient: tricolorGradientSoft,
+        border: const Border(
+          bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+        ),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'RESPONDER-CMD',
-                style: TextStyle(
-                  color: neonCyan,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 2,
+              ShaderMask(
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [
+                    Color(0xFFFF9933), // Saffron
+                    Color(0xFF1E293B), // Dark Blue (Middle)
+                    Color(0xFF138808), // Green
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ).createShader(bounds),
+                child: const Text(
+                  'SAHAYAK',
+                  style: TextStyle(
+                    color: Colors.white, // Required for ShaderMask to work correctly
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                  ),
                 ),
               ),
-              Text(
-                'FIELD AGENT DASHBOARD',
+              const Text(
+                'COMMAND DASHBOARD',
                 style: TextStyle(
                   color: Colors.blueGrey,
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5,
+                  letterSpacing: 1.2,
                 ),
               ),
             ],
@@ -259,14 +293,19 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
             children: [
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
+                  color: Colors.white,
                   shape: BoxShape.circle,
-                  border: Border.all(color: glassBorder),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                    )
+                  ],
                 ),
                 child: IconButton(
                   icon: const Icon(
                     Icons.leaderboard_rounded,
-                    color: Color(0xFFFFD700),
+                    color: Color(0xFFF59E0B),
                   ),
                   onPressed: () {
                     Navigator.push(
@@ -278,22 +317,30 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
                   },
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
+                  color: Colors.white,
                   shape: BoxShape.circle,
-                  border: Border.all(color: glassBorder),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                    )
+                  ],
                 ),
                 child: IconButton(
                   icon: const Icon(
-                    Icons.power_settings_new_rounded,
-                    color: Colors.orangeAccent,
+                    Icons.person_rounded,
+                    color: neonCyan,
                   ),
                   onPressed: () {
-                    context.read<HelpRequestBloc>().add(ClearHelpRequest());
-                    context.read<ChatBloc>().add(ClearChat());
-                    context.read<AuthBloc>().add(AuthSignOutRequested());
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const HelperProfileScreen(),
+                      ),
+                    );
                   },
                 ),
               ),
@@ -305,69 +352,97 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
   }
 
   Widget _buildStatusBar() {
-    final statusColor = _isAvailable ? Colors.greenAccent : neonOrange;
+    final statusColor = _isAvailable ? const Color(0xFF10B981) : neonOrange;
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        color: statusColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: statusColor.withOpacity(0.2)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 8,
-            height: 8,
+            width: 10,
+            height: 10,
             decoration: BoxDecoration(
               color: statusColor,
               shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: statusColor, blurRadius: 6)],
+              boxShadow: [
+                BoxShadow(
+                  color: statusColor.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  spreadRadius: 2,
+                )
+              ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 16),
           Text(
-            _isAvailable ? 'TRANSMISSION READY' : 'SYSTEM OFFLINE',
+            _isAvailable ? 'ACTIVE & READY' : 'CURRENTLY OFFLINE',
             style: TextStyle(
               color: statusColor,
-              fontWeight: FontWeight.w900,
-              fontSize: 10,
-              letterSpacing: 2,
+              fontWeight: FontWeight.w800,
+              fontSize: 11,
+              letterSpacing: 1,
             ),
           ),
           const Spacer(),
-          Transform.scale(
-            scale: 0.8,
-            child: Switch(
-              value: _isAvailable,
-              onChanged: _toggleAvailability,
-              activeThumbColor: Colors.greenAccent,
-              activeTrackColor: Colors.greenAccent.withOpacity(0.3),
-              inactiveThumbColor: neonOrange,
-              inactiveTrackColor: neonOrange.withOpacity(0.3),
-            ),
+          Switch.adaptive(
+            value: _isAvailable,
+            onChanged: _toggleAvailability,
+            activeColor: const Color(0xFF10B981),
           ),
         ],
       ),
     );
   }
 
+  void _startPriorityHeartbeat() {
+    _priorityHeartbeat?.cancel();
+    _priorityHeartbeat = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      final locationState = context.read<LocationBloc>().state;
+      if (locationState is LocationLoaded && _helperId != null) {
+        context.read<HelpRequestBloc>().add(
+          SortRequestsByPriority(
+            helperLat: locationState.lat,
+            helperLng: locationState.lng,
+          ),
+        );
+      }
+    });
+  }
+
   Widget _buildCyberSwitcher() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      padding: const EdgeInsets.all(4),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
-        color: slatePanel.withOpacity(0.5),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: glassBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+          ),
+        ],
       ),
       child: TabBar(
         controller: _tabController,
         onTap: (_) => setState(() {}),
         indicator: BoxDecoration(
-          color: neonCyan.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: neonCyan.withOpacity(0.5), width: 1.5),
+          color: neonCyan.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(16),
         ),
         labelColor: neonCyan,
         unselectedLabelColor: Colors.blueGrey.shade400,
@@ -375,13 +450,12 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
         dividerColor: Colors.transparent,
         labelStyle: const TextStyle(
           fontWeight: FontWeight.w900,
-          fontSize: 10,
-          letterSpacing: 1,
+          fontSize: 11,
         ),
         tabs: const [
-          Tab(text: 'UPLINKS'),
-          Tab(text: 'MISSIONS'),
-          Tab(text: 'ARCHIVE'),
+          Tab(text: 'NEW REQUESTS'),
+          Tab(text: 'ACTIVE'),
+          Tab(text: 'HISTORY'),
           Tab(text: 'DENIED'),
         ],
       ),
@@ -433,7 +507,7 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
     Color cardColor = isPending
         ? neonCyan
         : isAccepted
-        ? Colors.greenAccent
+        ? const Color(0xFF10B981)
         : isRejected
         ? neonOrange
         : Colors.blueGrey;
@@ -441,14 +515,13 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: slatePanel,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cardColor.withOpacity(0.3), width: 1),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: cardColor.withOpacity(0.05),
-            blurRadius: 15,
-            spreadRadius: -5,
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -456,24 +529,53 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
         children: [
           // Header
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: BoxDecoration(
-              color: cardColor.withOpacity(0.05),
+              color: cardColor.withValues(alpha: 0.05),
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
+                top: Radius.circular(24),
               ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  request.crisisType.toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13,
-                    letterSpacing: 1.5,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      request.crisisType.toUpperCase(),
+                      style: TextStyle(
+                        color: cardColor,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    if (isPending && request.priorityScore != null) ...[
+                      const SizedBox(width: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: (request.priorityScore! > 100)
+                              ? Colors.orange.withValues(alpha: 0.1)
+                              : neonCyan.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'PRIORITY: ${request.priorityScore!.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            color: (request.priorityScore! > 100)
+                                ? Colors.orange
+                                : neonCyan,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 StatusBadge(status: request.status),
               ],
@@ -488,11 +590,17 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: darkBg,
+                        color: Colors.white,
                         shape: BoxShape.circle,
-                        border: Border.all(color: glassBorder),
+                        border: Border.all(color: Colors.grey.shade100),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 10,
+                          )
+                        ],
                       ),
                       child: Icon(
                         Icons.person_pin_rounded,
@@ -508,18 +616,17 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
                           Text(
                             request.victimName ?? "ANONYMOUS CLIENT",
                             style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E293B),
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                           Text(
-                            'COORDINATES: ${request.victimCurrLat.toStringAsFixed(4)}, ${request.victimCurrLong.toStringAsFixed(4)}',
+                            'LOC: ${request.victimCurrLat.toStringAsFixed(4)}, ${request.victimCurrLong.toStringAsFixed(4)}',
                             style: TextStyle(
                               color: Colors.blueGrey.shade400,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ],
@@ -538,9 +645,9 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.greenAccent.withOpacity(0.1),
+                        color: Colors.greenAccent.withValues(alpha: 0.1),
                         border: Border.all(
-                          color: Colors.greenAccent.withOpacity(0.5),
+                          color: Colors.greenAccent.withValues(alpha: 0.5),
                         ),
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -600,14 +707,14 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
                       Expanded(
                         child: ElevatedButton(
                           onPressed: () async {
-                            // 1. Update request status in DB (existing mission logic)
+                            // 1. Update request status in DB
                             context.read<HelpRequestBloc>().add(
                               UpdateHelpRequestStatus(
                                 requestId: request.id,
                                 status: 'accepted',
                               ),
                             );
-                            // 2. Create help_session for scoring (isolated leaderboard logic)
+                            // 2. Create help_session for scoring
                             if (_helperId != null) {
                               await context
                                   .read<LeaderboardRepository>()
@@ -622,19 +729,18 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: neonCyan,
-                            foregroundColor: darkBg,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(16),
                             ),
-                            elevation: 4,
-                            shadowColor: neonCyan.withOpacity(0.5),
+                            elevation: 0,
                           ),
                           child: const Text(
-                            'ACCEPT',
+                            'ACCEPT MISSION',
                             style: TextStyle(
                               fontWeight: FontWeight.w900,
-                              letterSpacing: 2,
+                              letterSpacing: 1,
                             ),
                           ),
                         ),
@@ -814,7 +920,7 @@ class _HelperHomeScreenState extends State<HelperHomeScreen>
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 2,
-        shadowColor: color.withOpacity(0.3),
+        shadowColor: color.withValues(alpha: 0.3),
       ),
     );
   }

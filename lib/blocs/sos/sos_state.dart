@@ -24,6 +24,16 @@ class SosListening extends SosState {
 /// Wake word detected — app launched to foreground
 class SosActivated extends SosState {}
 
+/// Prompt user to choose: Woman Safety SOS or Voice Assist
+class SosAwaitingAction extends SosState {
+  final double lat;
+  final double lon;
+  const SosAwaitingAction({required this.lat, required this.lon});
+
+  @override
+  List<Object?> get props => [lat, lon];
+}
+
 /// Recording the victim's distress message (dynamic capturing)
 class SosCapturing extends SosState {
   final String liveText;

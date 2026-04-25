@@ -36,6 +36,8 @@ class SosBloc extends Bloc<SosEvent, SosState> {
     on<EnableSos>(_onEnableSos);
     on<DisableSos>(_onDisableSos);
     on<StartSosCapture>(_onStartSosCapture);
+    on<SelectWomanSafetyAction>(_onSelectWomanSafetyAction);
+    on<SelectVoiceAssistAction>(_onSelectVoiceAssistAction);
     on<DistressCaptured>(_onDistressCaptured);
     on<SubmitOfflineSos>(_onSubmitOfflineSos);
     on<SensorDebugDataReceived>(_onSensorDebugDataReceived);
@@ -110,39 +112,81 @@ class SosBloc extends Bloc<SosEvent, SosState> {
     // 1. Connectivity Check
     final isOnline = await _lowNetworkRepo.hasInternet();
     
+    // 2. Fetch Location INSTANTLY using cache
+    Position? pos;
+    try {
+      // Pull from cache - takes 0 seconds
+      pos = await Geolocator.getLastKnownPosition();
+      
+      // If cache is empty, do a very fast low-accuracy check
+      if (pos == null) {
+        pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.low,
+          timeLimit: const Duration(seconds: 1),
+        );
+      }
+
+    } catch (e) {
+      developer.log('SosBloc: GPS retrieval error: $e');
+    }
+
     if (!isOnline) {
       developer.log('SosBloc: LOW NETWORK detected. Switching to Offline SOS flow.');
       
-      // Fetch Failsafe Location
-      Position? pos;
-      try {
-        pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 3),
-        );
-      } catch (_) {
-        pos = await Geolocator.getLastKnownPosition();
-      }
-
-      if (pos != null) {
-        emit(SosOfflineInputPending(lat: pos.latitude, lon: pos.longitude));
-        
-        // Start 10-second auto-send timer
-        _offlineAutoSendTimer?.cancel();
-        _offlineAutoSendTimer = Timer(const Duration(seconds: 10), () {
-          if (state is SosOfflineInputPending) {
-             add(const SubmitOfflineSos("Emergency SOS (Auto-Sent)", "high"));
-          }
-        });
-        return;
-      } else {
-        developer.log('SosBloc: Could not fetch location for offline SOS.');
-        // Fallback to online flow just in case, or show error
-      }
+      // Always show offline UI so victim can at least send SMS
+      emit(SosOfflineInputPending(
+        lat: pos?.latitude ?? 0.0, 
+        lon: pos?.longitude ?? 0.0
+      ));
+      
+      _offlineAutoSendTimer?.cancel();
+      _offlineAutoSendTimer = Timer(const Duration(seconds: 10), () {
+        if (state is SosOfflineInputPending) {
+           add(const SubmitOfflineSos("Emergency SOS (Auto-Sent)", "high"));
+        }
+      });
+      return;
     }
 
-    developer.log('SosBloc: Proceeding with Online Phase 2 flow');
-    // 2. Call n8n TTS: "You can speak now. Describe your emergency."
+    // 3. Choice Screen (Online)
+    // ALWAYS show the choice screen so the victim can proceed instantly.
+    // Even if pos is null, we show the UI with 0.0 fallback.
+    emit(SosAwaitingAction(
+      lat: pos?.latitude ?? 0.0, 
+      lon: pos?.longitude ?? 0.0
+    ));
+  }
+
+  Future<void> _onSelectWomanSafetyAction(
+      SelectWomanSafetyAction event, Emitter<SosState> emit) async {
+    emit(const SosCaptured("women safety sos"));
+    
+    try {
+      // Trigger the dedicated Women Safety SOS webhook
+      await _repository.triggerWomenSafetySos(
+        victimId: victimId,
+        lat: event.lat,
+        lng: event.lon,
+      );
+      
+      // Hand off to captured state to trigger HelpRequest tracking
+      emit(const SosCaptured("women safety sos"));
+    } catch (e) {
+      developer.log('SosBloc: Woman Safety Alert failed: $e');
+      emit(SosError('Woman Safety Alert failed: $e'));
+    }
+  }
+
+  Future<void> _onSelectVoiceAssistAction(
+      SelectVoiceAssistAction event, Emitter<SosState> emit) async {
+    if (state is! SosAwaitingAction) return;
+    final currentState = state as SosAwaitingAction;
+    final lat = currentState.lat;
+    final lon = currentState.lon;
+
+    developer.log('SosBloc: Voice Assist Selected. Starting Phase 2...');
+    
+    // Call n8n TTS: "You can speak now. Describe your emergency."
     try {
       final ttsPath = await _repository.triggerTTS(
           "You can speak now. Describe your emergency.");
@@ -150,7 +194,6 @@ class SosBloc extends Bloc<SosEvent, SosState> {
       if (ttsPath != null) {
         final player = AudioPlayer();
         await player.play(DeviceFileSource(ttsPath));
-        // Wait for the audio to finish (with 5s max timeout)
         await player.onPlayerComplete.first
             .timeout(const Duration(seconds: 5), onTimeout: () {});
         await player.dispose();
@@ -159,7 +202,7 @@ class SosBloc extends Bloc<SosEvent, SosState> {
       developer.log('SosBloc: TTS playback error: $e');
     }
 
-    // 3. Start STT recording immediately after TTS
+    // Start STT recording
     await _startPhase2(emit);
   }
 

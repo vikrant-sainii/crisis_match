@@ -106,9 +106,9 @@ class _LowNetworkSosSheetState extends State<LowNetworkSosSheet> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: neonOrange.withOpacity(0.1),
+                  color: neonOrange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: neonOrange.withOpacity(0.5)),
+                  border: Border.all(color: neonOrange.withValues(alpha: 0.5)),
                 ),
                 child: Text(
                   'AUTO-SEND: ${_secondsRemaining}S',
@@ -136,9 +136,9 @@ class _LowNetworkSosSheetState extends State<LowNetworkSosSheet> {
             maxLines: 2,
             decoration: InputDecoration(
               hintText: 'e.g. Broken leg, building fire, etc.',
-              hintStyle: TextStyle(color: Colors.white.withOpacity(0.2)),
+              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.2)),
               filled: true,
-              fillColor: darkBg.withOpacity(0.5),
+              fillColor: darkBg.withValues(alpha: 0.5),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: glassBorder)),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: glassBorder)),
               focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: neonCyan)),
@@ -182,7 +182,7 @@ class _LowNetworkSosSheetState extends State<LowNetworkSosSheet> {
                 foregroundColor: darkBg,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 elevation: 8,
-                shadowColor: neonOrange.withOpacity(0.5),
+                shadowColor: neonOrange.withValues(alpha: 0.5),
               ),
               child: const Text(
                 'DISPATCH SMS NOW',
@@ -204,7 +204,7 @@ class _LowNetworkSosSheetState extends State<LowNetworkSosSheet> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? (value == 'high' ? Colors.red.withOpacity(0.2) : neonCyan.withOpacity(0.1)) : darkBg,
+            color: isSelected ? (value == 'high' ? Colors.red.withValues(alpha: 0.2) : neonCyan.withValues(alpha: 0.1)) : darkBg,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: isSelected ? (value == 'high' ? Colors.red : neonCyan) : glassBorder),
           ),

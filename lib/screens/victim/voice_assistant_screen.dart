@@ -115,10 +115,10 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 10),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
+                          color: Colors.white.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(30),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                           ),
                         ),
                         child: Row(
@@ -133,7 +133,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
                             Text(
                               header,
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.8),
+                                color: Colors.white.withValues(alpha: 0.8),
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -203,7 +203,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: (isThinking ? Colors.blue : Colors.white).withOpacity(0.3 * pulse),
+                              color: (isThinking ? Colors.blue : Colors.white).withValues(alpha: 0.3 * pulse),
                               blurRadius: 40 + (pulse * 20),
                               spreadRadius: 10 + (pulse * 10),
                             ),
