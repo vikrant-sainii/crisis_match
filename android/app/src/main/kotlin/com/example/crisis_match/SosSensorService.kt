@@ -110,23 +110,24 @@ class SosSensorService : Service() {
     }
 
     private fun triggerSos() {
-        // App is alive in background, call flutter directly natively
-        if (MainActivity.methodChannel != null) {
-            Handler(Looper.getMainLooper()).post {
-                MainActivity.methodChannel?.invokeMethod("sosTrigger", null)
-            }
-            return
+        // App was killed or alive, we MUST launch via Intent to force foreground/lockscreen bypass
+        val intent = packageManager.getLaunchIntentForPackage(packageName)!!.apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or 
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or 
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(SOS_TRIGGER_EXTRA, true)
         }
-
-        // App was killed, launch via Intent
-        val intent =
-                packageManager.getLaunchIntentForPackage(packageName)!!.apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    putExtra(SOS_TRIGGER_EXTRA, true)
-                }
+        
         try {
             startActivity(intent)
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+            // Fallback for extreme cases
+            if (MainActivity.methodChannel != null) {
+                Handler(Looper.getMainLooper()).post {
+                    MainActivity.methodChannel?.invokeMethod("sosTrigger", null)
+                }
+            }
+        }
     }
 
     private fun buildNotification(): Notification {

@@ -20,19 +20,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Ensure SOS app can turn on the screen and show above the lock screen
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                    android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                            android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                            android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-            )
-        }
+        setupLockScreenFlags()
 
         // App was CLOSED — launched by SosSensorService
         if (intent?.getBooleanExtra(SosSensorService.SOS_TRIGGER_EXTRA, false) == true) {
@@ -46,8 +34,23 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun setupLockScreenFlags() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                        android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+            )
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setupLockScreenFlags() // Re-apply flags for subsequent triggers
         // App was ALIVE (minimized) — brought to foreground by SosSensorService
         if (intent.getBooleanExtra(SosSensorService.SOS_TRIGGER_EXTRA, false)) {
             triggerFlutterSos(0L) // Already alive, no delay needed

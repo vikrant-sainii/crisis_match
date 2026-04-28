@@ -81,28 +81,35 @@ class _LowNetworkSosSheetState extends State<LowNetworkSosSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'LOW NETWORK SOS ⚠️',
-                    style: TextStyle(
-                      color: neonOrange,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.2,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'LOW NETWORK SOS ⚠️',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: neonOrange,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'HELP WILL BE SENT VIA SMS',
-                    style: TextStyle(
-                      color: Colors.blueGrey,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
+                    Text(
+                      'HELP WILL BE SENT VIA SMS',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.blueGrey,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(

@@ -102,6 +102,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with TickerProviderSt
         ],
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.center,
           indicatorColor: neonCyan,
           labelColor: neonCyan,
           unselectedLabelColor: Colors.blueGrey,
